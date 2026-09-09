@@ -102,7 +102,7 @@ export function App() {
                     {loading && !snapshot ? <span className="skeleton h-7 w-12 rounded" aria-label="Loading" /> :
                       <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">{percentage === null ? <span className="text-sm font-normal tracking-normal text-muted">Unavailable</span> : <>{percentage}<span className="ml-0.5 text-sm font-medium text-muted">%</span></>}</span>}
                   </div>
-                  {percentage !== null ? <meter className="occupancy-meter" min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
+                  {percentage !== null ? <meter className="occupancy-meter" data-level={percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'} min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
                 </li>
               );
             })}

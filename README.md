@@ -31,7 +31,7 @@ The browser fetches [TMU's Facility Occupancy page](https://recportal.torontomu.
 
 “Last checked” means when this app fetched the page, not when TMU measured occupancy. After five minutes, or a failed refresh, retained readings are marked as potentially outdated. There is no automatic polling. The local timer only updates the freshness label.
 
-Future-time selection shows a coming-soon message. No predictions or busy/quiet thresholds are implemented.
+Future-time selection shows a coming-soon message. No predictions are implemented. Occupancy bars are green below 25%, yellow from 25% to below 50%, and red at 50% and above. These are app-defined visual thresholds, not TMU classifications or historical conclusions.
 
 ## Validation
 

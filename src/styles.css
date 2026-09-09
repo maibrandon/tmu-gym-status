@@ -32,9 +32,12 @@ button, input { font: inherit; }
 .facility-row { padding: 23px 0; border-bottom: 1px solid #e0e5eb; }
 .facility-row:last-child { border-bottom: 0; }
 .occupancy-meter { display: block; width: 100%; height: 5px; border: 0; border-radius: 99px; background: #e4e9ef; appearance: none; }
+.occupancy-meter[data-level="low"] { --meter-fill: #23844b; }
+.occupancy-meter[data-level="moderate"] { --meter-fill: #b58a00; }
+.occupancy-meter[data-level="high"] { --meter-fill: #cd4141; }
 .occupancy-meter::-webkit-meter-bar { height: 5px; border: 0; border-radius: 99px; background: #e4e9ef; }
-.occupancy-meter::-webkit-meter-optimum-value { border-radius: 99px; background: #244bd1; }
-.occupancy-meter::-moz-meter-bar { border-radius: 99px; background: #244bd1; }
+.occupancy-meter::-webkit-meter-optimum-value { border-radius: 99px; background: var(--meter-fill); }
+.occupancy-meter::-moz-meter-bar { border-radius: 99px; background: var(--meter-fill); }
 .empty-meter { height: 5px; border-radius: 99px; background: #e4e9ef; }
 .skeleton { display: inline-block; background: #e4e9ef; animation: pulse 1.5s ease-in-out infinite; }
 .empty-meter.skeleton { display: block; }
