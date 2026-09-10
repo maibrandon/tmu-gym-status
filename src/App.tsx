@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FACILITIES, fetchOccupancy, SOURCE_URL } from './occupancy';
+import { Appearance } from './Appearance';
 import type { Snapshot } from './occupancy';
 
 const clock = new Intl.DateTimeFormat('en-CA', {
@@ -125,6 +126,7 @@ export function App() {
       <footer className="mt-9 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-sm text-muted">
         <span>An unofficial student project.</span>
         <a className="source-link" href={SOURCE_URL} target="_blank" rel="noreferrer">TMU source <span aria-hidden="true">↗</span></a>
+        <div className="w-full"><Appearance /></div>
       </footer>
     </main>
   );
