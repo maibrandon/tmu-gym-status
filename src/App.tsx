@@ -19,7 +19,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const activeRequest = useRef<AbortController | null>(null);
-  const stale = snapshot !== null && now - snapshot.checkedAt.getTime() >= 5 * 60_000;
+  const stale = snapshot !== null && (snapshot.stale || (snapshot.checkedAt !== null && now - snapshot.checkedAt.getTime() >= 10 * 60_000));
 
   async function load() {
     if (activeRequest.current) return;
@@ -35,9 +35,9 @@ export function App() {
     } catch (cause) {
       if (!controller.signal.aborted) {
         setError(cause instanceof TypeError
-          ? 'Couldn’t reach TMU. Check your connection and try again.'
+          ? 'Couldn’t load occupancy. Check your connection and try again.'
           : cause instanceof Error && cause.name === 'TimeoutError'
-            ? 'TMU took too long to respond. Please try again.'
+            ? 'The request took too long to respond. Please try again.'
             : cause instanceof Error ? cause.message : 'Couldn’t load occupancy. Please try again.');
       }
     } finally {
@@ -80,7 +80,7 @@ export function App() {
             <div>
               <h2 id="occupancy-heading" className="text-base font-semibold">Current occupancy</h2>
               <p className="mt-1 text-sm text-muted" role="status">
-                {loading ? 'Checking TMU…' : snapshot ? `Last checked ${clock.format(snapshot.checkedAt)} ET` : 'Readings unavailable'}
+                {loading ? 'Checking occupancy…' : snapshot?.checkedAt ? `Last collected ${clock.format(snapshot.checkedAt)} ET` : 'Readings unavailable'}
                 {!loading && snapshot && (stale || error) ? ' · May be outdated' : ''}
               </p>
             </div>
@@ -90,11 +90,13 @@ export function App() {
             </button>
           </div>
 
+          {snapshot?.message && <p role="status" className="mt-5 text-sm leading-relaxed text-muted">{snapshot.message}</p>}
           {error && <div role="alert" className="error-message mt-5">{error}{snapshot && ' Showing the last successful readings.'}</div>}
 
           <ul className="facility-list" aria-busy={loading}>
             {FACILITIES.map((facility) => {
-              const percentage = snapshot?.readings.find((reading) => reading.id === facility.id)?.percentage ?? null;
+              const expired = snapshot?.checkedAt == null || now - snapshot.checkedAt.getTime() > 30 * 60_000;
+              const percentage = expired ? null : snapshot?.readings.find((reading) => reading.id === facility.id)?.percentage ?? null;
               return (
                 <li key={facility.id} className="facility-row">
                   <div className="mb-3 flex items-center justify-between gap-5">
@@ -102,12 +104,12 @@ export function App() {
                     {loading && !snapshot ? <span className="skeleton h-7 w-12 rounded" aria-label="Loading" /> :
                       <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">{percentage === null ? <span className="text-sm font-normal tracking-normal text-muted">Unavailable</span> : <>{percentage}<span className="ml-0.5 text-sm font-medium text-muted">%</span></>}</span>}
                   </div>
-                  {percentage !== null ? <meter className="occupancy-meter" min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
+                  {percentage !== null ? <meter className="occupancy-meter" data-level={percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'} min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
                 </li>
               );
             })}
           </ul>
-          <p className="mt-4 text-sm leading-relaxed text-muted">Reported by TMU. Readings may lag behind what’s happening at the gym.</p>
+          <p className="mt-4 text-sm leading-relaxed text-muted">Fetched from TMU when you open this page or refresh, during collection hours. Readings may lag behind the gym.</p>
         </section>
       ) : (
         <section className="future-panel" aria-labelledby="future-heading">
