@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { FACILITIES, parseOccupancy } from './occupancy';
+import { FACILITIES } from '../shared/facilities';
+import { parseOccupancy } from '../shared/parser';
 
 const card = (name: string, value: string) => `<div class="occupancy-card"><h2><strong>${name}</strong></h2><canvas data-occupancy="60"></canvas><p class="occupancy-count"><strong>${value}</strong></p><p class="occupancy-count"><strong>${value}</strong></p></div>`;
 

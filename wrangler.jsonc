@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tmu-gym-status",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-10",
+  "account_id": "cc7eeab68c2d7be799529b5f744e3ee3",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tmu-gym-status",
+      "database_id": "6344b0a0-626e-4b9e-af9f-9f9bdf7dfb62",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "COLLECTION_ENABLED": "true"
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}
