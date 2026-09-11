@@ -98,3 +98,44 @@ describe('collector with local D1', () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+// Historical queries execute against the same isolated D1 runtime as collection tests.
+import { historicalResponse } from '../worker/history';
+import { localInstant } from '../shared/history';
+async function seedDay(date: string, minute: number, percentage: number, count: number) {
+  for(let i=0;i<count;i++) {
+    const instant=localInstant(date,minute+i*5);
+    const slot=Math.floor(instant.getTime()/300000);
+    await env.DB.prepare("INSERT OR IGNORE INTO collection_runs(slot,started_at,status) VALUES (?,?,'success')").bind(slot,instant.toISOString()).run();
+    await env.DB.prepare('INSERT INTO observations(facility_id,slot,collected_at,percentage,local_date,weekday,minute_of_day,source_url) VALUES (?,?,?,?,?,?,?,?)').bind('mac-fitness',slot,instant.toISOString(),percentage,date,new Date(`${date}T12:00:00Z`).getUTCDay(),minute+i*5,'fixture').run();
+  }
+}
+it('weights days equally and excludes sparse buckets, with supported quieter alternatives', async()=>{
+  await seedDay('2026-09-10',1080,20,3);
+  await seedDay('2026-09-17',1080,80,6);
+  await seedDay('2026-09-17',1110,20,3);
+  await seedDay('2026-09-17',1140,0,2);
+  const response=await historicalResponse(new URL('http://test/api/history?date=2026-09-24&time=18:00'),env,new Date('2026-09-18T18:00:00Z'));
+  const data=await response.json();
+  expect(data.facilities[0].baseline).toMatchObject({percentage:50,dates:2,observations:9});
+  expect(data.facilities[0].alternatives.map((b:{minute:number})=>b.minute)).toEqual([1110]);
+  expect(data.facilities[1].baseline).toBeNull();
+});
+it('supports one completed day without pretending it is multi-week coverage', async()=>{
+  await seedDay('2026-09-10',1080,0,3);
+  const data=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-17&time=18:00'),env,new Date('2026-09-10T23:00:00Z'))).json();
+  expect(data.facilities[0].baseline).toMatchObject({percentage:0,dates:1});
+});
+it('does not estimate holidays, past times, invalid dates, or stale history', async()=>{
+  await seedDay('2026-09-10',1080,30,3);
+  const current=new Date('2026-10-09T18:00:00Z');
+  const query=(params:string)=>historicalResponse(new URL(`http://test/api/history?${params}`),env,current);
+  expect((await (await query('date=2026-10-12&time=18:00')).json()).state).toBe('holiday');
+  expect((await query('date=2026-02-30&time=18:00')).status).toBe(400);
+  expect((await query('date=2026-09-10&time=18:00')).status).toBe(400);
+  expect((await (await query('date=2026-10-15&time=18:00')).json()).facilities[0].baseline).toBeNull();
+});
+it('converts Toronto winter and summer planning times correctly',()=>{
+  expect(localInstant('2026-09-17',1080).toISOString()).toBe('2026-09-17T22:00:00.000Z');
+  expect(localInstant('2026-12-17',1080).toISOString()).toBe('2026-12-17T23:00:00.000Z');
+});

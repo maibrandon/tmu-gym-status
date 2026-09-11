@@ -1,3 +1,4 @@
+import { History } from './History';
 import { useEffect, useRef, useState } from 'react';
 import { FACILITIES, fetchOccupancy, SOURCE_URL } from './occupancy';
 import { Appearance } from './Appearance';
@@ -14,6 +15,7 @@ function timeLabel(time: string) {
 
 export function App() {
   const [mode, setMode] = useState<'now' | 'later'>('now');
+  const [date, setDate] = useState(() => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
   const [time, setTime] = useState('18:00');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,16 +112,19 @@ export function App() {
               );
             })}
           </ul>
+          <History mode="now" live={snapshot} />
           <p className="mt-4 text-sm leading-relaxed text-muted">Fetched from TMU when you open this page or refresh, during collection hours. Readings may lag behind the gym.</p>
         </section>
       ) : (
         <section className="future-panel" aria-labelledby="future-heading">
           <h2 id="future-heading" className="mb-5 text-lg font-semibold">When are you thinking?</h2>
+          <label htmlFor="gym-date" className="mb-2 block text-sm font-medium">Date · Toronto</label>
+          <input id="gym-date" type="date" value={date} onChange={event=>setDate(event.target.value)} className="mb-5" />
           <label htmlFor="gym-time" className="mb-2 block text-sm font-medium">Time to go <span className="font-normal text-muted">· Toronto time</span></label>
           <input id="gym-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
           <div className="mt-7 border-t border-line pt-6" role="status">
             <p className="mb-2 text-base font-medium">{time ? `Planning for ${timeLabel(time)}` : 'Pick a time that works for you'}</p>
-            <p className="text-sm leading-relaxed text-muted">Historical recommendations coming soon. We don’t have an estimate for this time yet.</p>
+            <History mode="later" date={date} time={time} />
           </div>
         </section>
       )}

@@ -10,3 +10,5 @@ dist/
 .wrangler/
 .dev.vars*
 worker-configuration.d.ts
+
+docs/operations.md
