@@ -139,3 +139,21 @@ it('converts Toronto winter and summer planning times correctly',()=>{
   expect(localInstant('2026-09-17',1080).toISOString()).toBe('2026-09-17T22:00:00.000Z');
   expect(localInstant('2026-12-17',1080).toISOString()).toBe('2026-12-17T23:00:00.000Z');
 });
+it('uses other weekday averages for missing Wednesday buckets and prefers matching Wednesday data',async()=>{
+ await seedDay('2026-09-14',1140,20,3);
+ await seedDay('2026-09-15',1140,40,6);
+ await seedDay('2026-09-14',1170,5,3);
+ await seedDay('2026-09-16',1170,65,3);
+ const data=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-23&time=19:00'),env,new Date('2026-09-17T18:00:00Z'))).json();
+ expect(data.facilities[0].baseline).toMatchObject({percentage:30,dates:2,observations:9,basis:'weekday'});
+ // Wednesday's 65% beats Monday's 5% as the appropriate reference; it isn't a quieter alternative.
+ expect(data.facilities[0].alternatives).toEqual([]);
+ const exact=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-23&time=19:30'),env,new Date('2026-09-17T18:00:00Z'))).json();
+ expect(exact.facilities[0].baseline).toMatchObject({percentage:65,dates:1,basis:'matching-weekday'});
+});
+it('does not borrow weekday readings for weekend suggestions',async()=>{
+ await seedDay('2026-09-14',1080,20,3);
+ const data=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-19&time=18:00'),env,new Date('2026-09-17T18:00:00Z'))).json();
+ expect(data.facilities[0].baseline).toBeNull();
+ expect(data.facilities[0].alternatives).toEqual([]);
+});

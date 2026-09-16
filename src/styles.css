@@ -84,3 +84,11 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 
 .appearance-control { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .appearance-control select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+
+/* Keep the row itself as the interaction; reveal stays in normal document flow. */
+.facility-summary { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; border-radius: 4px; }
+.facility-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 240ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease, visibility 240ms; }
+.reveal-row[data-open="true"] .facility-reveal { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+.facility-reveal-clip { overflow: hidden; min-height: 0; }
+.facility-reveal-content { padding-top: 18px; }
+@media (prefers-reduced-motion: reduce) { .facility-reveal { transition: none; } }
