@@ -76,7 +76,7 @@ button, input { font: inherit; }
 .empty-meter.skeleton { display: block; }
 .error-message { padding: 14px 16px; border: 1px solid var(--error-border); border-radius: 8px; background: var(--error-bg); color: var(--error-text); font-size: 14px; line-height: 1.5; }
 .future-panel { padding: 24px; background: var(--surface); border: 1px solid var(--color-line); border-radius: 12px; }
-input[type=time] { display: block; box-sizing: border-box; max-width: 100%; width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--page); color: var(--text); font-size: 18px; }
+input[type=time], input[type=date] { display: block; box-sizing: border-box; max-width: 100%; width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--page); color: var(--text); font-size: 18px; }
 .source-link { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; margin-block: -10px; color: var(--text); text-underline-offset: 4px; }
 .source-link:hover { text-decoration: underline; }
 @keyframes pulse { 50% { opacity: .45; } }
@@ -84,3 +84,11 @@ input[type=time] { display: block; box-sizing: border-box; max-width: 100%; widt
 
 .appearance-control { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .appearance-control select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+
+/* Keep the row itself as the interaction; reveal stays in normal document flow. */
+.facility-summary { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; border-radius: 4px; }
+.facility-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 240ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease, visibility 240ms; }
+.reveal-row[data-open="true"] .facility-reveal { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+.facility-reveal-clip { overflow: hidden; min-height: 0; }
+.facility-reveal-content { padding-top: 18px; }
+@media (prefers-reduced-motion: reduce) { .facility-reveal { transition: none; } }

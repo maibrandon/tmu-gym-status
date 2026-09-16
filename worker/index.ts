@@ -1,3 +1,4 @@
+import { historicalResponse } from './history';
 import { FACILITIES } from '../shared/facilities';
 import { collectionWindow } from '../shared/schedule';
 import { collect } from './collector';
@@ -6,6 +7,13 @@ import { fetchLiveReadings } from './source';
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/api/history') {
+      if (request.method !== 'GET') return new Response('Method not allowed', {status:405});
+      try { return await historicalResponse(url, env); } catch {
+        console.error(JSON.stringify({event:'history_read_failed'}));
+        return Response.json({error:'Historical context is temporarily unavailable.'},{status:503});
+      }
+    }
     if (url.pathname !== '/api/occupancy') {
       if (url.pathname.startsWith('/api/')) return new Response('Not found', { status: 404 });
       return env.ASSETS.fetch(request);

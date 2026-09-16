@@ -1,3 +1,7 @@
+import { torontoParts } from '../shared/schedule';
+import { useHistory } from './useHistory';
+import { RevealRow } from './RevealRow';
+import { HistoryDetails, History } from './History';
 import { useEffect, useRef, useState } from 'react';
 import { FACILITIES, fetchOccupancy, SOURCE_URL } from './occupancy';
 import { Appearance } from './Appearance';
@@ -14,13 +18,17 @@ function timeLabel(time: string) {
 
 export function App() {
   const [mode, setMode] = useState<'now' | 'later'>('now');
-  const [time, setTime] = useState('18:00');
+  const [initialPlan] = useState(() => torontoParts(new Date(Math.ceil((Date.now() + 60000) / 1800000) * 1800000)));
+  const [date, setDate] = useState(initialPlan.date);
+  const [time, setTime] = useState(`${String(Math.floor(initialPlan.minute / 60)).padStart(2, '0')}:${String(initialPlan.minute % 60).padStart(2, '0')}`);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const activeRequest = useRef<AbortController | null>(null);
   const stale = snapshot !== null && (snapshot.stale || (snapshot.checkedAt !== null && now - snapshot.checkedAt.getTime() >= 10 * 60_000));
+
+  const history = useHistory('now', undefined, undefined, snapshot?.checkedAt);
 
   async function load() {
     if (activeRequest.current) return;
@@ -99,14 +107,16 @@ export function App() {
               const expired = snapshot?.checkedAt == null || now - snapshot.checkedAt.getTime() > 30 * 60_000;
               const percentage = expired ? null : snapshot?.readings.find((reading) => reading.id === facility.id)?.percentage ?? null;
               return (
-                <li key={facility.id} className="facility-row">
+                <RevealRow key={facility.id} label={`${facility.name}, alternative times`} summary={<>
                   <div className="mb-3 flex items-center justify-between gap-5">
-                    <h3 className="max-w-[75%] text-base font-medium leading-snug">{facility.name}</h3>
+                    <span className="max-w-[75%] text-base font-medium leading-snug">{facility.name}</span>
                     {loading && !snapshot ? <span className="skeleton h-7 w-12 rounded" aria-label="Loading" /> :
                       <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">{percentage === null ? <span className="text-sm font-normal tracking-normal text-muted">Unavailable</span> : <>{percentage}<span className="ml-0.5 text-sm font-medium text-muted">%</span></>}</span>}
                   </div>
                   {percentage !== null ? <meter className="occupancy-meter" data-level={percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'} min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
-                </li>
+                </>}>
+                  <HistoryDetails mode="now" id={facility.id} data={history.data} error={history.error} />
+                </RevealRow>
               );
             })}
           </ul>
@@ -115,11 +125,13 @@ export function App() {
       ) : (
         <section className="future-panel" aria-labelledby="future-heading">
           <h2 id="future-heading" className="mb-5 text-lg font-semibold">When are you thinking?</h2>
+          <label htmlFor="gym-date" className="mb-2 block text-sm font-medium">Date · Toronto</label>
+          <input id="gym-date" type="date" value={date} onChange={event=>setDate(event.target.value)} className="mb-5" />
           <label htmlFor="gym-time" className="mb-2 block text-sm font-medium">Time to go <span className="font-normal text-muted">· Toronto time</span></label>
           <input id="gym-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
           <div className="mt-7 border-t border-line pt-6" role="status">
             <p className="mb-2 text-base font-medium">{time ? `Planning for ${timeLabel(time)}` : 'Pick a time that works for you'}</p>
-            <p className="text-sm leading-relaxed text-muted">Historical recommendations coming soon. We don’t have an estimate for this time yet.</p>
+            <History date={date} time={time} />
           </div>
         </section>
       )}
