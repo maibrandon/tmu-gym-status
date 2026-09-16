@@ -1,34 +1,44 @@
-import { torontoParts } from '../shared/schedule';
-import { useHistory } from './useHistory';
-import { RevealRow } from './RevealRow';
-import { HistoryDetails, History } from './History';
-import { useEffect, useRef, useState } from 'react';
-import { FACILITIES, fetchOccupancy, SOURCE_URL } from './occupancy';
-import { Appearance } from './Appearance';
-import type { Snapshot } from './occupancy';
+import { torontoParts } from "../shared/schedule";
+import { useHistory } from "./useHistory";
+import { RevealRow } from "./RevealRow";
+import { HistoryDetails, History } from "./History";
+import { useEffect, useRef, useState } from "react";
+import { FACILITIES, fetchOccupancy, SOURCE_URL } from "./occupancy";
+import { Appearance } from "./Appearance";
+import type { Snapshot } from "./occupancy";
 
-const clock = new Intl.DateTimeFormat('en-CA', {
-  hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto',
+const clock = new Intl.DateTimeFormat("en-CA", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "America/Toronto",
 });
 
 function timeLabel(time: string) {
-  const [hours, minutes] = time.split(':').map(Number);
-  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
+  const [hours, minutes] = time.split(":").map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
 }
 
 export function App() {
-  const [mode, setMode] = useState<'now' | 'later'>('now');
-  const [initialPlan] = useState(() => torontoParts(new Date(Math.ceil((Date.now() + 60000) / 1800000) * 1800000)));
+  const [mode, setMode] = useState<"now" | "later">("now");
+  const [initialPlan] = useState(() =>
+    torontoParts(new Date(Math.ceil((Date.now() + 60000) / 1800000) * 1800000)),
+  );
   const [date, setDate] = useState(initialPlan.date);
-  const [time, setTime] = useState(`${String(Math.floor(initialPlan.minute / 60)).padStart(2, '0')}:${String(initialPlan.minute % 60).padStart(2, '0')}`);
+  const [time, setTime] = useState(
+    `${String(Math.floor(initialPlan.minute / 60)).padStart(2, "0")}:${String(initialPlan.minute % 60).padStart(2, "0")}`,
+  );
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const activeRequest = useRef<AbortController | null>(null);
-  const stale = snapshot !== null && (snapshot.stale || (snapshot.checkedAt !== null && now - snapshot.checkedAt.getTime() >= 10 * 60_000));
+  const stale =
+    snapshot !== null &&
+    (snapshot.stale ||
+      (snapshot.checkedAt !== null &&
+        now - snapshot.checkedAt.getTime() >= 10 * 60_000));
 
-  const history = useHistory('now', undefined, undefined, snapshot?.checkedAt);
+  const history = useHistory("now", undefined, undefined, snapshot?.checkedAt);
 
   async function load() {
     if (activeRequest.current) return;
@@ -40,14 +50,23 @@ export function App() {
       const result = await fetchOccupancy(controller.signal);
       setSnapshot(result);
       setNow(Date.now());
-      console.table(result.readings.map(({ name, percentage }) => ({ facility: name, occupancy: percentage === null ? 'Unavailable' : `${percentage}%` })));
+      console.table(
+        result.readings.map(({ name, percentage }) => ({
+          facility: name,
+          occupancy: percentage === null ? "Unavailable" : `${percentage}%`,
+        })),
+      );
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setError(cause instanceof TypeError
-          ? 'Couldn’t load occupancy. Check your connection and try again.'
-          : cause instanceof Error && cause.name === 'TimeoutError'
-            ? 'The request took too long to respond. Please try again.'
-            : cause instanceof Error ? cause.message : 'Couldn’t load occupancy. Please try again.');
+        setError(
+          cause instanceof TypeError
+            ? "Couldn’t load occupancy. Check your connection and try again."
+            : cause instanceof Error && cause.name === "TimeoutError"
+              ? "The request took too long to respond. Please try again."
+              : cause instanceof Error
+                ? cause.message
+                : "Couldn’t load occupancy. Please try again.",
+        );
       }
     } finally {
       if (activeRequest.current === controller) {
@@ -70,75 +89,238 @@ export function App() {
   return (
     <main className="mx-auto w-full max-w-[640px] px-5 pb-8 pt-7 sm:px-8 sm:pt-14">
       <header className="mb-9 flex items-center justify-between gap-4">
-        <a href="./" className="brand flex items-center gap-2.5" aria-label="TMU Gym Status home">
-          <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 9v6m4-9v12m6-12v12m4-9v6M9 12h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg></span>
-          <span>TMU <span className="font-normal text-muted">/ Gym status</span></span>
+        <a
+          href="./"
+          className="brand flex items-center gap-2.5"
+          aria-label="TMU Gym Status home"
+        >
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M5 9v6m4-9v12m6-12v12m4-9v6M9 12h6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span>
+            TMU <span className="font-normal text-muted">/ Gym status</span>
+          </span>
         </a>
         <span className="text-sm text-muted">Toronto</span>
       </header>
 
-      <h1 className="mb-6 text-[2.125rem] font-semibold leading-tight tracking-[-0.045em] sm:text-[2.625rem]">Let’s go gym.</h1>
-      <div className="mode-switch mb-7" role="group" aria-label="When do you want to go?">
-        <button type="button" aria-pressed={mode === 'now'} onClick={() => setMode('now')} className={mode === 'now' ? 'selected' : ''}>Let’s go gym now</button>
-        <button type="button" aria-pressed={mode === 'later'} onClick={() => setMode('later')} className={mode === 'later' ? 'selected' : ''}>Choose a time</button>
+      <h1 className="mb-6 text-[2.125rem] font-semibold leading-tight tracking-[-0.045em] sm:text-[2.625rem]">
+        Let’s go gym.
+      </h1>
+      <div
+        className="mode-switch mb-7"
+        role="group"
+        aria-label="When do you want to go?"
+      >
+        <button
+          type="button"
+          aria-pressed={mode === "now"}
+          onClick={() => setMode("now")}
+          className={mode === "now" ? "selected" : ""}
+        >
+          Let’s go gym now
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "later"}
+          onClick={() => setMode("later")}
+          className={mode === "later" ? "selected" : ""}
+        >
+          Choose a time
+        </button>
       </div>
 
-      {mode === 'now' ? (
+      {mode === "now" ? (
         <section aria-labelledby="occupancy-heading">
           <div className="mb-1 flex items-start justify-between gap-4">
             <div>
-              <h2 id="occupancy-heading" className="text-base font-semibold">Current occupancy</h2>
+              <h2 id="occupancy-heading" className="text-base font-semibold">
+                Current occupancy
+              </h2>
               <p className="mt-1 text-sm text-muted" role="status">
-                {loading ? 'Checking occupancy…' : snapshot?.checkedAt ? `Last collected ${clock.format(snapshot.checkedAt)} ET` : 'Readings unavailable'}
-                {!loading && snapshot && (stale || error) ? ' · May be outdated' : ''}
+                {loading
+                  ? "Checking occupancy…"
+                  : snapshot?.checkedAt
+                    ? `Last collected ${clock.format(snapshot.checkedAt)} ET`
+                    : "Readings unavailable"}
+                {!loading && snapshot && (stale || error)
+                  ? " · May be outdated"
+                  : ""}
               </p>
             </div>
-            <button type="button" className="refresh" disabled={loading} onClick={() => void load()} aria-label="Refresh current occupancy">
-              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="M16 8a6.2 6.2 0 1 0-.3 4M16 3v5h-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <button
+              type="button"
+              className="refresh"
+              disabled={loading}
+              onClick={() => void load()}
+              aria-label="Refresh current occupancy"
+            >
+              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+                <path
+                  d="M16 8a6.2 6.2 0 1 0-.3 4M16 3v5h-5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               Refresh
             </button>
           </div>
 
-          {snapshot?.message && <p role="status" className="mt-5 text-sm leading-relaxed text-muted">{snapshot.message}</p>}
-          {error && <div role="alert" className="error-message mt-5">{error}{snapshot && ' Showing the last successful readings.'}</div>}
+          {snapshot?.message && (
+            <p
+              role="status"
+              className="mt-5 text-sm leading-relaxed text-muted"
+            >
+              {snapshot.message}
+            </p>
+          )}
+          {error && (
+            <div role="alert" className="error-message mt-5">
+              {error}
+              {snapshot && " Showing the last successful readings."}
+            </div>
+          )}
 
           <ul className="facility-list" aria-busy={loading}>
             {FACILITIES.map((facility) => {
-              const expired = snapshot?.checkedAt == null || now - snapshot.checkedAt.getTime() > 30 * 60_000;
-              const percentage = expired ? null : snapshot?.readings.find((reading) => reading.id === facility.id)?.percentage ?? null;
+              const expired =
+                snapshot?.checkedAt == null ||
+                now - snapshot.checkedAt.getTime() > 30 * 60_000;
+              const percentage = expired
+                ? null
+                : (snapshot?.readings.find(
+                    (reading) => reading.id === facility.id,
+                  )?.percentage ?? null);
               return (
-                <RevealRow key={facility.id} label={`${facility.name}, alternative times`} summary={<>
-                  <div className="mb-3 flex items-center justify-between gap-5">
-                    <span className="max-w-[75%] text-base font-medium leading-snug">{facility.name}</span>
-                    {loading && !snapshot ? <span className="skeleton h-7 w-12 rounded" aria-label="Loading" /> :
-                      <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">{percentage === null ? <span className="text-sm font-normal tracking-normal text-muted">Unavailable</span> : <>{percentage}<span className="ml-0.5 text-sm font-medium text-muted">%</span></>}</span>}
-                  </div>
-                  {percentage !== null ? <meter className="occupancy-meter" data-level={percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'} min={0} max={100} value={percentage} aria-label={`${facility.name} occupancy`}>{percentage}%</meter> : <div className={`empty-meter ${loading ? 'skeleton' : ''}`} aria-hidden="true" />}
-                </>}>
-                  <HistoryDetails mode="now" id={facility.id} data={history.data} error={history.error} />
+                <RevealRow
+                  key={facility.id}
+                  label={`${facility.name}, alternative times`}
+                  summary={
+                    <>
+                      <div className="mb-3 flex items-center justify-between gap-5">
+                        <span className="max-w-[75%] text-base font-medium leading-snug">
+                          {facility.name}
+                        </span>
+                        {loading && !snapshot ? (
+                          <span
+                            className="skeleton h-7 w-12 rounded"
+                            aria-label="Loading"
+                          />
+                        ) : (
+                          <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">
+                            {percentage === null ? (
+                              <span className="text-sm font-normal tracking-normal text-muted">
+                                Unavailable
+                              </span>
+                            ) : (
+                              <>
+                                {percentage}
+                                <span className="ml-0.5 text-sm font-medium text-muted">
+                                  %
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      {percentage !== null ? (
+                        <meter
+                          className="occupancy-meter"
+                          data-level={
+                            percentage < 25
+                              ? "low"
+                              : percentage < 50
+                                ? "moderate"
+                                : "high"
+                          }
+                          min={0}
+                          max={100}
+                          value={percentage}
+                          aria-label={`${facility.name} occupancy`}
+                        >
+                          {percentage}%
+                        </meter>
+                      ) : (
+                        <div
+                          className={`empty-meter ${loading ? "skeleton" : ""}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </>
+                  }
+                >
+                  <HistoryDetails
+                    mode="now"
+                    id={facility.id}
+                    data={history.data}
+                    error={history.error}
+                  />
                 </RevealRow>
               );
             })}
           </ul>
-          <p className="mt-4 text-sm leading-relaxed text-muted">Fetched from TMU when you open this page or refresh, during collection hours. Readings may lag behind the gym.</p>
+          <p className="mt-4 text-sm leading-relaxed text-muted">
+            Fetched from TMU when you open this page or refresh, during
+            collection hours. Readings may lag behind the gym.
+          </p>
         </section>
       ) : (
         <section className="future-panel" aria-labelledby="future-heading">
-          <h2 id="future-heading" className="mb-5 text-lg font-semibold">When are you thinking?</h2>
-          <label htmlFor="gym-date" className="mb-2 block text-sm font-medium">Date · Toronto</label>
-          <input id="gym-date" type="date" value={date} onChange={event=>setDate(event.target.value)} className="mb-5" />
-          <label htmlFor="gym-time" className="mb-2 block text-sm font-medium">Time to go <span className="font-normal text-muted">· Toronto time</span></label>
-          <input id="gym-time" type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+          <h2 id="future-heading" className="mb-5 text-lg font-semibold">
+            When are you thinking?
+          </h2>
+          <label htmlFor="gym-date" className="mb-2 block text-sm font-medium">
+            Date · Toronto
+          </label>
+          <input
+            id="gym-date"
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="mb-5"
+          />
+          <label htmlFor="gym-time" className="mb-2 block text-sm font-medium">
+            Time to go{" "}
+            <span className="font-normal text-muted">· Toronto time</span>
+          </label>
+          <input
+            id="gym-time"
+            type="time"
+            value={time}
+            onChange={(event) => setTime(event.target.value)}
+          />
           <div className="mt-7 border-t border-line pt-6" role="status">
-            <p className="mb-2 text-base font-medium">{time ? `Planning for ${timeLabel(time)}` : 'Pick a time that works for you'}</p>
+            <p className="mb-2 text-base font-medium">
+              {time
+                ? `Planning for ${timeLabel(time)}`
+                : "Pick a time that works for you"}
+            </p>
             <History date={date} time={time} />
           </div>
         </section>
       )}
       <footer className="mt-9 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-sm text-muted">
-        <span>An unofficial student project.</span>
-        <a className="source-link" href={SOURCE_URL} target="_blank" rel="noreferrer">TMU source <span aria-hidden="true">↗</span></a>
-        <div className="w-full"><Appearance /></div>
+        <span>An unofficial student project — not affiliated with TMU.</span>
+        <a
+          className="source-link"
+          href={SOURCE_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Data source <span aria-hidden="true">↗</span>
+        </a>
+        <div className="w-full">
+          <Appearance />
+        </div>
       </footer>
     </main>
   );
