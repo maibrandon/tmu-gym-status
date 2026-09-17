@@ -7,7 +7,6 @@ import { useHistory } from './useHistory';
 import { RevealRow } from './RevealRow';
 const label = (minute: number) => `${Math.floor(minute / 60) % 12 || 12}${minute % 60 ? `:${String(minute % 60).padStart(2, '0')}` : ''} ${minute < 720 ? 'AM' : 'PM'}`;
 const weekday = new Intl.DateTimeFormat('en-CA', { weekday: 'long', timeZone: 'America/Toronto' });
-const calendarDate = new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'America/Toronto' });
 
 export function HistoryDetails({id,data,error,mode='later',livePercentage=null}: {id:string;data:HistoryResponse|null;error:string|null;mode?:'now'|'later';livePercentage?:number|null}) {
   if (error) return <p className="text-sm text-muted">Suggestions are unavailable right now.</p>;
@@ -23,12 +22,18 @@ export function HistoryDetails({id,data,error,mode='later',livePercentage=null}:
     (mode !== 'now' || (option.minute > current.minute && livePercentage !== null &&
       option.percentage <= livePercentage - HISTORY_POLICY.improvement)));
   if (data.message) return <p className="text-sm text-muted">Suggestions aren’t available for this time.</p>;
-  if (!suggestion) return <p className="text-sm text-muted">{(mode === 'now' ? Boolean(result?.alternatives.length) : Boolean(result?.baseline)) ? 'It looks like this is the least busy time within the next 3 hours!' : 'No recorded times in this three-hour window yet.'}</p>;
-  const date = new Date(`${suggestion.date}T12:00:00Z`);
-  const time = label(suggestion.minute);
+  const later = result?.quietestLater;
+  const showLater = mode === 'now' && later && later.date === current.date &&
+    later.minute - current.minute > HISTORY_POLICY.nearbyMinutes &&
+    eligibleRecommendation(later.date, later.minute) && livePercentage !== null &&
+    later.percentage <= livePercentage - HISTORY_POLICY.improvement;
+  const date = new Date(`${data.date}T12:00:00Z`);
   return <div className="text-sm">
-    <p className="font-medium">How about {suggestion.date === data.date ? time : `${calendarDate.format(date)} at ${time}`}?</p>
-    <p className="mt-1 text-muted">{suggestion.basis === 'weekday' ? 'Weekdays' : `${weekday.format(date)}s`} around {time} average <span className="font-medium">{suggestion.percentage}%</span> occupancy.</p>
+    {suggestion ? <>
+      <p className="font-medium">How about {label(suggestion.minute)}?</p>
+      <p className="mt-1 text-muted">{suggestion.basis === 'weekday' ? 'Weekdays' : `${weekday.format(date)}s`} around {label(suggestion.minute)} average <span className="font-medium">{suggestion.percentage}%</span> occupancy.</p>
+    </> : <p className="text-muted">{(mode === 'now' ? Boolean(result?.alternatives.length) : Boolean(result?.baseline)) ? 'It looks like this is the least busy time within the next 3 hours!' : 'No recorded times in this three-hour window yet.'}</p>}
+    {showLater && <p className="mt-3 text-muted">{suggestion ? 'Or, the' : 'The'} least busy time remaining today would likely be <span className="font-medium">{label(later.minute)}</span> at around <span className="font-medium">{later.percentage}%</span> occupancy{later.basis === 'weekday' ? ', based on weekday averages' : ''}.</p>}
   </div>;
 }
 

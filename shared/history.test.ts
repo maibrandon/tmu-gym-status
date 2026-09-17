@@ -45,3 +45,10 @@ it('keeps late historical baselines but excludes late recommendations',()=>{
  expect(result.alternatives.map(b=>b.minute)).toEqual([1320]);
  expect(future([row(1350,20)],1350).baseline?.percentage).toBe(20);
 });
+
+it('offers the quietest remaining time separately beyond three hours, excluding closing slots',()=>{
+ const result=future([row(780,80),row(900,55),row(1320,30),row(1350,0)],780);
+ expect(result.alternatives.map(b=>b.minute)).toEqual([900]);
+ expect(result.quietestLater).toMatchObject({minute:1320,percentage:30});
+ expect(future([row(780,80),row(900,20),row(1320,30)],780).quietestLater).toBeNull();
+});
