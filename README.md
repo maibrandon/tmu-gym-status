@@ -20,30 +20,33 @@ TMU publishes occupancy for several recreation spaces, but deciding when to go m
 
 ## Architecture
 
-The frontend and API run on the same Cloudflare Worker deployment. The browser requests the app’s API; the Worker fetches and parses TMU’s HTML, avoiding a dependency on browser access to TMU’s cross-origin responses.
+The frontend and API run on the same Cloudflare Worker deployment. The browser reads saved results through the app’s API. Only the scheduled collector fetches and parses TMU’s HTML, so visitor traffic does not increase requests to TMU.
 
 ```mermaid
 flowchart LR
     Browser[React frontend] --> Live[Worker: live occupancy API]
-    Live --> TMU[TMU occupancy page]
+    Live --> Snapshot[(D1 latest snapshot)]
     Cron[Cloudflare Cron: every 5 minutes] --> Collector[Worker: collector]
-    Collector --> TMU
+    Collector --> TMU[TMU occupancy page]
+    Collector --> Snapshot
+    Collector --> Averages[(D1 historical averages)]
     Collector --> DB[(Cloudflare D1)]
     Browser -. Historical context in development .-> History[Worker: history API]
-    History --> DB
+    History --> Averages
 ```
 
-Live requests return freshly fetched readings. Separately, the scheduled collector saves observations to D1, a managed SQL database with SQLite semantics. Visitor requests never add historical samples, so traffic to the app does not bias the dataset. Both paths share the HTML parser and collection-hours policy.
+Live requests return the latest collected snapshot. The scheduled collector atomically saves that snapshot and new historical observations to D1, then refreshes reusable weekday averages. Visitor requests neither scrape TMU nor add historical samples, so traffic does not bias the dataset.
+
+Refresh rereads the shared snapshot. Readings become stale after ten minutes or a failed collection and become unavailable after thirty minutes. Failed collection preserves the previous snapshot; partial collections explicitly mark missing facilities unavailable. Historical averages expire after 24 hours without a successful refresh, independently of live readings.
 
 Collection runs use unique five-minute slots and a database lock to prevent duplicate scheduled work. Failed fetches and missing values remain gaps; they never become zero occupancy or fabricated observations. Collection follows Toronto time and excludes configured holidays.
 
-Shared caching is planned: recent results will be reused across visitors and the collector, including on a visitor’s first page load. Until that work ships, live requests and scheduled collection can each contact TMU independently.
 
 ## Learning from the data
 
 The exploratory history implementation groups readings by facility, weekday, and 30-minute period. It averages each contributing day first, then gives those daily averages equal weight. A heavily sampled day therefore does not outweigh another day.
 
-Early estimates can use a single qualifying day, with the number of days and readings shown alongside the result. Unsupported times remain unavailable. Suggestions prefer nearby supported times; when those are missing, they can use other measured times or the next matching weekday, with the date made explicit.
+Early estimates can use a single qualifying day. Matching weekdays take priority; missing weekday slots can use labelled weekday averages. Unsupported times remain unavailable. Nearby recommendations stay within three hours and leave at least an hour before closing. Live-view alternatives must average at least five percentage points below the current reading. A separate later-today estimate can identify a quieter remaining slot beyond that window.
 
 A week of collection provides roughly one example of each weekday—not a reliable recurring pattern. Broader coverage and stronger validation are the next steps before treating these estimates as typical occupancy.
 

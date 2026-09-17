@@ -14,18 +14,27 @@ export function eligibleBucket(date: string, minute: number) {
 export function eligibleRecommendation(date: string, minute: number) {
   return eligibleBucket(date, minute) && collectionWindow(localInstant(date, minute + 59)).state === 'open';
 }
-export function selectHistory(id: string, buckets: HistoricalBucket[], date: string, minute: number, now: Date, mode: string): HistoricalFacility {
+export type HistorySlotCache = Map<number, {eligible:boolean;recommendable:boolean;instant:number}>;
+export function selectHistory(id: string, buckets: HistoricalBucket[], date: string, minute: number, now: Date, mode: string, slots: HistorySlotCache = new Map()): HistoricalFacility {
+  const slot = (value:number) => {
+    let entry=slots.get(value);
+    if (!entry) {
+      entry={eligible:eligibleBucket(date,value),recommendable:eligibleRecommendation(date,value),instant:localInstant(date,value).getTime()};
+      slots.set(value,entry);
+    }
+    return entry;
+  };
   const bucket = Math.floor(minute / 30) * 30;
-  const supported = buckets.filter(b => b.facilityId === id && b.dates >= HISTORY_POLICY.minimumDates && eligibleBucket(date, b.minute));
+  const supported = buckets.filter(b => b.facilityId === id && b.dates >= HISTORY_POLICY.minimumDates && slot(b.minute).eligible);
   const baseline = supported.find(b => b.minute === bucket) ?? null;
   // Rank the biggest occupancy reduction first; proximity breaks equal-value ties.
   // Never widen the window or roll a suggestion into a different date.
   // Live-view candidates are compared with the live reading in the UI.
   // A historical baseline must not discard a time that is quieter than live.
   const alternatives = supported.filter(b =>
-    b.minute !== bucket && eligibleRecommendation(date, b.minute) &&
+    b.minute !== bucket && slot(b.minute).recommendable &&
     Math.abs(b.minute - minute) <= HISTORY_POLICY.nearbyMinutes &&
-    localInstant(date, b.minute).getTime() > now.getTime() &&
+    slot(b.minute).instant > now.getTime() &&
     (mode !== 'now' || b.minute > minute) &&
     (mode === 'now' || !baseline || b.percentage <= baseline.percentage - HISTORY_POLICY.improvement)
   ).sort((a,b) => a.percentage - b.percentage ||
@@ -33,7 +42,7 @@ export function selectHistory(id: string, buckets: HistoricalBucket[], date: str
   ).slice(0,3).map(b => ({ ...b, date }));
   // Find the minimum across all remaining slots before deciding whether it is distant.
   const quietest = supported.filter(b => b.minute > minute &&
-    eligibleRecommendation(date, b.minute) && localInstant(date, b.minute) > now)
+    slot(b.minute).recommendable && slot(b.minute).instant > now.getTime())
     .sort((a,b) => a.percentage - b.percentage || a.minute - b.minute)[0];
   const quietestLater = quietest && quietest.minute - minute > HISTORY_POLICY.nearbyMinutes
     ? { ...quietest, date } : null;

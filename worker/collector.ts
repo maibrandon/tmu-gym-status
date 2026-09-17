@@ -1,3 +1,4 @@
+import { refreshAggregates } from './aggregates';
 import { SOURCE_URL } from '../shared/facilities';
 import { fetchLiveReadings } from './source';
 import { collectionWindow, torontoParts } from '../shared/schedule';
@@ -24,6 +25,7 @@ export async function collect(env: Env, now = new Date(), request: typeof fetch 
       await env.DB.prepare("UPDATE collection_runs SET status = 'skipped', finished_at = ? WHERE slot = ?").bind(new Date().toISOString(), slot).run();
       return;
     }
+    let stage: 'source' | 'storage' = 'source';
     try {
       const fetchedAt = new Date();
       const readings = await fetchLiveReadings(request);
@@ -35,13 +37,24 @@ export async function collect(env: Env, now = new Date(), request: typeof fetch 
         .bind(reading.id, slot, fetchedAt.toISOString(), reading.percentage, local.date, local.weekday, local.minute, SOURCE_URL));
       writes.push(env.DB.prepare('UPDATE collection_runs SET status = ?, finished_at = ?, valid_count = ? WHERE slot = ?')
         .bind(valid.length === 6 ? 'success' : 'partial', new Date().toISOString(), valid.length, slot));
+      writes.push(env.DB.prepare(`INSERT INTO latest_snapshot(id,collected_at,readings_json) VALUES (1,?,?)
+        ON CONFLICT(id) DO UPDATE SET collected_at=excluded.collected_at,readings_json=excluded.readings_json,refresh_failed=0
+        WHERE excluded.collected_at > latest_snapshot.collected_at`)
+        .bind(fetchedAt.toISOString(),JSON.stringify(readings)));
+      stage = 'storage';
       await env.DB.batch(writes);
       console.log(JSON.stringify({ event: 'collection_saved', slot, validCount: valid.length }));
+      // A failed aggregate refresh must not roll back or mislabel a successful collection.
+      try { await refreshAggregates(env, new Date()); }
+      catch (error) { console.error(JSON.stringify({event:'history_aggregation_failed',error:error instanceof Error?error.message.slice(0,250):'unknown'})); }
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0, 250) : 'collection_failed';
-      await env.DB.prepare("UPDATE collection_runs SET status = 'failed', finished_at = ?, error = ? WHERE slot = ?")
-        .bind(new Date().toISOString(), message, slot).run();
-      console.error(JSON.stringify({ event: 'collection_failed', slot, error: message }));
+      await env.DB.batch([
+        env.DB.prepare("UPDATE collection_runs SET status = 'failed', finished_at = ?, error = ? WHERE slot = ?")
+          .bind(new Date().toISOString(), message, slot),
+        env.DB.prepare('UPDATE latest_snapshot SET refresh_failed = 1 WHERE id = 1'),
+      ]);
+      console.error(JSON.stringify({ event: 'collection_failed', stage, slot, error: message }));
       throw error;
     }
   } finally {
