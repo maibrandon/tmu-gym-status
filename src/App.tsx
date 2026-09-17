@@ -178,8 +178,14 @@ export function App() {
             </div>
           )}
 
-          <ul className="facility-list" aria-busy={loading}>
-            {FACILITIES.map((facility) => {
+          {['Popular', 'Other'].map((group) => (
+            <section className="facility-group" key={group} aria-labelledby={`group-${group.toLowerCase()}`}>
+              <h3 className="facility-group-title" id={`group-${group.toLowerCase()}`}>{group}</h3>
+              <ul className="facility-list" aria-busy={loading}>
+            {FACILITIES.filter((facility) => {
+              const popular = facility.id === 'mac-fitness' || facility.id === 'rac-fitness';
+              return group === 'Popular' ? popular : !popular;
+            }).map((facility) => {
               const expired =
                 snapshot?.checkedAt == null ||
                 now - snapshot.checkedAt.getTime() > 30 * 60_000;
@@ -238,7 +244,9 @@ export function App() {
                 </RevealRow>
               );
             })}
-          </ul>
+              </ul>
+            </section>
+          ))}
           <p className="reading-note">
             Readings from TMU may lag behind the gym.
           </p>

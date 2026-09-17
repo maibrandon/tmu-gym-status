@@ -152,3 +152,7 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
   .facility-row { padding: 20px 0; }
   .site-footer { margin-top: 30px; align-items: flex-start; }
 }
+
+.facility-group { margin-top: 28px; }
+.facility-group + .facility-group { margin-top: 32px; }
+.facility-group-title { margin-bottom: 4px; color: var(--color-muted); font-size: 12px; font-weight: 550; letter-spacing: .02em; }
