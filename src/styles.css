@@ -68,9 +68,6 @@ button, input { font: inherit; }
 .occupancy-meter[data-level="low"] { --meter-fill: var(--low); }
 .occupancy-meter[data-level="moderate"] { --meter-fill: var(--moderate); }
 .occupancy-meter[data-level="high"] { --meter-fill: var(--high); }
-.occupancy-meter::-webkit-meter-bar { height: 5px; border: 0; border-radius: 99px; background: var(--track); }
-.occupancy-meter::-webkit-meter-optimum-value { border-radius: 99px; background: var(--meter-fill); }
-.occupancy-meter::-moz-meter-bar { border-radius: 99px; background: var(--meter-fill); }
 .empty-meter { height: 5px; border-radius: 99px; background: var(--track); }
 .skeleton { display: inline-block; background: var(--track); animation: pulse 1.5s ease-in-out infinite; }
 .empty-meter.skeleton { display: block; }
@@ -114,7 +111,6 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .occupancy-row { display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, 1.2fr) 64px 112px; align-items: center; column-gap: 28px; }
 .facility-name { font-size: 15px; line-height: 1.45; letter-spacing: -.02em; }
 .row-meter { display: block; min-width: 0; }
-.occupancy-meter, .empty-meter, .occupancy-meter::-webkit-meter-bar { height: 9px; }
 .occupancy-value { font-size: 17px; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
 .unavailable-value { color: var(--color-muted); }
 .occupancy-status { width: fit-content; padding: 5px 11px; border-radius: 8px; font-size: 12px; line-height: 1.4; white-space: nowrap; }
@@ -156,3 +152,9 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .facility-group { margin-top: 28px; }
 .facility-group + .facility-group { margin-top: 32px; }
 .facility-group-title { margin-bottom: 4px; color: var(--color-muted); font-size: 12px; font-weight: 550; letter-spacing: .02em; }
+
+/* Animate only the visual fill; the accessible reading is accurate immediately. */
+.occupancy-meter, .empty-meter { height: 9px; }
+.occupancy-fill { display: block; height: 100%; border-radius: inherit; background: var(--meter-fill); transform-origin: left center; animation: occupancy-fill-in 550ms cubic-bezier(.2,.7,.2,1) both; }
+@keyframes occupancy-fill-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .occupancy-fill { animation: none; } }

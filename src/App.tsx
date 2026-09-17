@@ -203,7 +203,8 @@ export function App() {
                       <span className="facility-name">{facility.name}</span>
                       <span className="row-meter">
                       {percentage !== null ? (
-                        <meter
+                        <span
+                          role="meter"
                           className="occupancy-meter"
                           data-level={
                             percentage < 35
@@ -212,13 +213,13 @@ export function App() {
                                 ? "moderate"
                                 : "high"
                           }
-                          min={0}
-                          max={100}
-                          value={percentage}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={percentage}
                           aria-label={`${facility.name} occupancy`}
                         >
-                          {percentage}%
-                        </meter>
+                          <span className="occupancy-fill" style={{ width: `${percentage}%` }} aria-hidden="true" />
+                        </span>
                       ) : (
                         <div
                           className={`empty-meter ${loading ? "skeleton" : ""}`}
