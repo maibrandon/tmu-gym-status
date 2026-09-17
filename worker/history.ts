@@ -1,5 +1,6 @@
+import { AGGREGATE_MAX_AGE_MS } from './aggregates';
 import { FACILITIES } from '../shared/facilities';
-import { HISTORY_POLICY, localInstant, eligibleBucket, selectHistory, type HistoricalBucket, type HistoryResponse } from '../shared/history';
+import { HISTORY_POLICY, localInstant, eligibleBucket, selectHistory, type HistorySlotCache, type HistoricalBucket, type HistoryResponse } from '../shared/history';
 import { collectionWindow, torontoParts } from '../shared/schedule';
 
 export async function historicalResponse(url: URL, env: Env, now = new Date()): Promise<Response> {
@@ -18,37 +19,13 @@ export async function historicalResponse(url: URL, env: Env, now = new Date()): 
   const headers = {'Cache-Control':'no-store'};
   if (env.COLLECTION_ENABLED !== 'true') return Response.json(empty('paused','Historical context is paused while the collection schedule is being reviewed.'),{headers});
   if (window.state !== 'open' || !eligibleBucket(date,Math.floor(minute/30)*30)) return Response.json(empty(window.state,window.reason ?? 'No estimates for this time.'),{headers});
-  const cutoff = new Date(`${local.date}T12:00:00Z`); cutoff.setUTCDate(cutoff.getUTCDate()-HISTORY_POLICY.days);
-  const fresh = new Date(`${local.date}T12:00:00Z`); fresh.setUTCDate(fresh.getUTCDate()-HISTORY_POLICY.maximumAgeDays);
-  const weekday = parsed.getUTCDay();
-  const weekdays = weekday >= 1 && weekday <= 5 ? [1,2,3,4,5] : [weekday];
-  const placeholders = weekdays.map(() => '?').join(',');
-  // Bound by facility and recent dates; weekdays may supply missing time buckets.
-  const buckets: HistoricalBucket[] = [];
-  for (const facility of FACILITIES) {
-    const rows = await env.DB.prepare(`SELECT local_date, CAST(minute_of_day / 30 AS INTEGER)*30 AS minute,
-      AVG(percentage) AS percentage, COUNT(*) AS observations, MAX(collected_at) AS updatedAt
-      FROM observations WHERE facility_id = ? AND weekday IN (${placeholders}) AND local_date >= ? AND local_date <= ?
-      AND minute_of_day BETWEEN ? AND ? AND parser_version = 1 AND collected_at < ?
-      GROUP BY local_date, CAST(minute_of_day / 30 AS INTEGER)
-      HAVING COUNT(DISTINCT CAST(minute_of_day / 5 AS INTEGER)) >= ?`)
-      .bind(facility.id,...weekdays,cutoff.toISOString().slice(0,10),local.date,0,1439,new Date(now.getTime()-30*60000).toISOString(),HISTORY_POLICY.minimumReadings)
-      .all<{local_date:string;minute:number;percentage:number;observations:number;updatedAt:string}>();
-    const groups = new Map<number, typeof rows.results>();
-    for (const row of rows.results) {
-      if (!eligibleBucket(row.local_date,row.minute)) continue;
-      groups.set(row.minute,[...(groups.get(row.minute) ?? []),row]);
-    }
-    for (const [bucket, allDays] of groups) {
-      const matching = allDays.filter(day => new Date(`${day.local_date}T12:00:00Z`).getUTCDay() === weekday);
-      const hasRecentMatch = matching.some(day => day.local_date >= fresh.toISOString().slice(0,10));
-      const days = hasRecentMatch ? matching : allDays;
-      const basis = hasRecentMatch ? 'matching-weekday' : 'weekday';
-      const dates = days.map(d=>d.local_date).sort();
-      if (dates[dates.length-1] < fresh.toISOString().slice(0,10)) continue;
-      buckets.push({basis,facilityId:facility.id,minute:bucket,percentage:Math.round(days.reduce((s,d)=>s+d.percentage,0)/days.length),dates:days.length,observations:days.reduce((s,d)=>s+d.observations,0),firstDate:dates[0],lastDate:dates[dates.length-1],updatedAt:days.map(d=>d.updatedAt).sort().at(-1)!});
-    }
+  const cached = await env.DB.prepare('SELECT generated_at, buckets_json FROM history_aggregates WHERE weekday = ?')
+    .bind(parsed.getUTCDay()).first<{generated_at:string;buckets_json:string}>();
+  if (!cached || now.getTime()-Date.parse(cached.generated_at) > AGGREGATE_MAX_AGE_MS) {
+    return Response.json(empty('unavailable','Historical estimates are awaiting a scheduled update.'),{headers});
   }
-  const data: HistoryResponse = {date,minute,state:'open',message:null,facilities:FACILITIES.map(f=>selectHistory(f.id,buckets,date,minute,now,mode)),generatedAt:now.toISOString(),policy:HISTORY_POLICY};
+  const buckets = JSON.parse(cached.buckets_json) as HistoricalBucket[];
+  const slots: HistorySlotCache = new Map();
+  const data: HistoryResponse = {date,minute,state:'open',message:null,facilities:FACILITIES.map(f=>selectHistory(f.id,buckets,date,minute,now,mode,slots)),generatedAt:now.toISOString(),policy:HISTORY_POLICY};
   return Response.json(data,{headers});
 }

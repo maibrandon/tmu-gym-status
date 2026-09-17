@@ -39,7 +39,7 @@ export function App() {
       (snapshot.checkedAt !== null &&
         now - snapshot.checkedAt.getTime() >= 10 * 60_000));
 
-  const history = useHistory("now", undefined, undefined, snapshot?.checkedAt);
+  const history = useHistory("now", undefined, undefined, snapshot?.checkedAt, !loading && mode === "now");
 
   async function load() {
     if (activeRequest.current) return;

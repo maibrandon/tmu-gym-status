@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { collect } from '../worker/collector';
@@ -13,13 +13,14 @@ const source = () => new Response(html, { headers: { 'content-type': 'text/html'
 beforeAll(async () => {
   runtime = new Miniflare(convertV4MiniflareOptions({ name: 'test', compatibilityDate: '2026-09-10', modules: true, script: 'export default {fetch(){return new Response("test")}}', d1Databases: ['DB'] }));
   const db = await runtime.getD1Database('DB');
-  const statements = readFileSync('migrations/0001_collection.sql', 'utf8').split(';').map(s => s.trim()).filter(Boolean);
+  const statements = readdirSync('migrations').filter(f=>f.endsWith('.sql')).sort().flatMap(f=>readFileSync(`migrations/${f}`, 'utf8').split(';').map(s=>s.trim()).filter(Boolean));
   for (const statement of statements) await db.prepare(statement).run();
   env = { DB: db, COLLECTION_ENABLED: 'true' } as Env;
 }, 30000);
 afterAll(async () => { await runtime?.dispose(); });
 beforeEach(async () => {
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM history_daily_buckets'), env.DB.prepare('DELETE FROM latest_snapshot'), env.DB.prepare('DELETE FROM history_aggregates'),
     env.DB.prepare('DELETE FROM observations'), env.DB.prepare('DELETE FROM collection_runs'),
     env.DB.prepare('UPDATE collector_lock SET token = NULL, lease_until = 0'),
   ]);
@@ -64,20 +65,43 @@ describe('collector with local D1', () => {
     await collect(env, now, async () => new Response('<div class="occupancy-card"><h2>MAC Fitness Centre</h2><p class="occupancy-count">40%</p></div>', { headers: { 'content-type': 'text/html' } }));
     expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(1);
     expect((await env.DB.prepare('SELECT status FROM collection_runs').first())?.status).toBe('partial');
+    const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
+    expect(data.readings.map((r:{percentage:number|null})=>r.percentage)).toEqual([40,null,null,null,null,null]);
   });
-  it('fetches on the first visit with an empty database and again on refresh', async () => {
-    const request = vi.fn(async () => source());
-    vi.stubGlobal('fetch', request);
-    for (let i = 0; i < 2; i++) {
-      const response = await worker.fetch(new Request('http://localhost/api/occupancy'), env);
+  it('serves 100 cold requests without contacting TMU or writing observations', async () => {
+    const request = vi.fn(); vi.stubGlobal('fetch',request);
+    const responses = await Promise.all(Array.from({length:100},()=>worker.fetch(new Request('http://localhost/api/occupancy'),env)));
+    for (const response of responses) {
       const data = await response.json();
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Cache-Control')).toBe('no-store');
-      expect(data.readings.map((r: { percentage: number }) => r.percentage)).toEqual([0,10,20,30,40,50]);
-      expect(data.checkedAt).toBe(now.toISOString());
+      expect(data.checkedAt).toBeNull();
+      expect(data.readings.every((r:{percentage:number|null})=>r.percentage===null)).toBe(true);
     }
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).not.toHaveBeenCalled();
     expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(0);
+  });
+  it('serves 100 warm requests from one collection without changing timestamps or history', async()=>{
+    const upstream=vi.fn(async()=>source());
+    await collect(env,now,upstream);
+    const request=vi.fn();vi.stubGlobal('fetch',request);
+    const responses=await Promise.all(Array.from({length:100},()=>worker.fetch(new Request('http://localhost/api/occupancy'),env)));
+    for(const response of responses) expect((await response.json()).checkedAt).toBe(now.toISOString());
+    expect(upstream).toHaveBeenCalledTimes(1);expect(request).not.toHaveBeenCalled();
+    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(6);
+  });
+  it.each([[9.999,false,true],[10,true,true],[30,true,true],[30.001,false,false]])('enforces snapshot age %s minutes',async(minutes,stale,available)=>{
+    await collect(env,now,async()=>source());
+    vi.setSystemTime(new Date(now.getTime()+Number(minutes)*60000));
+    const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
+    expect(data.stale).toBe(stale);
+    expect(data.checkedAt).toBe(available?now.toISOString():null);
+  });
+  it('preserves the snapshot when a later collection fails',async()=>{
+    await collect(env,now,async()=>source());
+    const later=new Date(now.getTime()+5*60000);vi.setSystemTime(later);
+    await expect(collect(env,later,async()=>new Response('error',{status:503}))).rejects.toThrow();
+    const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
+    expect(data.checkedAt).toBe(now.toISOString());expect(data.stale).toBe(true);
+    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(6);
   });
   it.each(['2026-09-11T03:00:00Z','2026-10-12T15:00:00Z'])('does not fetch live data outside the collection policy: %s', async date => {
     vi.setSystemTime(new Date(date));
@@ -88,9 +112,10 @@ describe('collector with local D1', () => {
     expect(data.readings.every((r: { percentage: number | null }) => r.percentage === null)).toBe(true);
     expect(data.checkedAt).toBe(null);
   });
-  it('returns unavailable when the live upstream fails', async () => {
+  it('does not contact a failing upstream on visitor requests', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('error', { status: 503 })));
-    expect((await worker.fetch(new Request('http://localhost/api/occupancy'), env)).status).toBe(503);
+    expect((await worker.fetch(new Request('http://localhost/api/occupancy'), env)).status).toBe(200);
+    expect(fetch).not.toHaveBeenCalled();
   });
   it('does not collect while the operator pause switch is off', async () => {
     const request = vi.fn();
@@ -100,7 +125,12 @@ describe('collector with local D1', () => {
 });
 
 // Historical queries execute against the same isolated D1 runtime as collection tests.
-import { historicalResponse } from '../worker/history';
+import { historicalResponse as cachedHistoricalResponse } from '../worker/history';
+import { refreshAggregates } from '../worker/aggregates';
+async function historicalResponse(url:URL, bindings:Env, date:Date) {
+  await refreshAggregates(bindings,date);
+  return cachedHistoricalResponse(url,bindings,date);
+}
 import { localInstant } from '../shared/history';
 async function seedDay(date: string, minute: number, percentage: number, count: number) {
   for(let i=0;i<count;i++) {
@@ -164,4 +194,56 @@ it('averages matching weekday dates equally across weeks',async()=>{
  await seedDay('2026-09-15',1140,95,6);
  const data=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-23&time=19:00'),env,new Date('2026-09-17T18:00:00Z'))).json();
  expect(data.facilities[0].baseline).toMatchObject({percentage:30,dates:2,observations:9,basis:'matching-weekday'});
+});
+
+it('reads historical aggregates without rebuilding on visitor requests and expires them',async()=>{
+ await seedDay('2026-09-10',1080,40,3);
+ const built=new Date('2026-09-10T23:00:00Z');
+ await refreshAggregates(env,built);
+ // Removing raw rows proves visitor reads use stored aggregates, not observations.
+ await env.DB.prepare('DELETE FROM observations').run();
+ const url=new URL('http://test/api/history?date=2026-09-17&time=18:00');
+ for(let i=0;i<3;i++) expect((await (await cachedHistoricalResponse(url,env,built)).json()).facilities[0].baseline.percentage).toBe(40);
+ expect((await (await cachedHistoricalResponse(url,env,new Date(built.getTime()+86400001))).json()).state).toBe('unavailable');
+});
+it('keeps successful snapshots and observations if aggregation fails',async()=>{
+ await env.DB.prepare('DROP TABLE history_aggregates').run();
+ try {
+  await collect(env,now,async()=>source());
+  expect((await env.DB.prepare('SELECT status FROM collection_runs').first())?.status).toBe('success');
+  expect((await env.DB.prepare('SELECT * FROM latest_snapshot').first())?.collected_at).toBe(now.toISOString());
+ } finally {
+  await env.DB.prepare('CREATE TABLE history_aggregates (weekday INTEGER PRIMARY KEY, generated_at TEXT NOT NULL, buckets_json TEXT NOT NULL)').run();
+ }
+});
+
+it('rolls back observations if snapshot publication fails',async()=>{
+ await env.DB.prepare(`CREATE TRIGGER block_snapshot BEFORE INSERT ON latest_snapshot BEGIN SELECT RAISE(ABORT,'fixture write failure'); END`).run();
+ try {
+  await expect(collect(env,now,async()=>source())).rejects.toThrow();
+  expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(0);
+  expect((await env.DB.prepare('SELECT * FROM latest_snapshot').all()).results).toHaveLength(0);
+  expect((await env.DB.prepare('SELECT status FROM collection_runs').first())?.status).toBe('failed');
+ } finally { await env.DB.prepare('DROP TRIGGER block_snapshot').run(); }
+});
+it('clears failure state after the next successful scheduled collection',async()=>{
+ await collect(env,now,async()=>source());
+ const failed=new Date(now.getTime()+300000);vi.setSystemTime(failed);
+ await expect(collect(env,failed,async()=>new Response('error',{status:503}))).rejects.toThrow();
+ const recovered=new Date(now.getTime()+600000);vi.setSystemTime(recovered);
+ await collect(env,recovered,async()=>source());
+ const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
+ expect(data.stale).toBe(false);expect(data.checkedAt).toBe(recovered.toISOString());
+});
+
+it('retains prior daily summaries while updating newly completed buckets',async()=>{
+ await seedDay('2026-09-10',1080,20,3);
+ await refreshAggregates(env,new Date('2026-09-10T23:00:00Z'));
+ await refreshAggregates(env,new Date('2026-09-11T23:00:00Z'));
+ // A subsequent refresh must reuse this older day's saved summary.
+ await env.DB.prepare('DELETE FROM observations').run();
+ await seedDay('2026-09-17',1080,80,6);
+ await refreshAggregates(env,new Date('2026-09-17T23:00:00Z'));
+ const data=await (await cachedHistoricalResponse(new URL('http://test/api/history?date=2026-09-24&time=18:00'),env,new Date('2026-09-17T23:00:00Z'))).json();
+ expect(data.facilities[0].baseline).toMatchObject({percentage:50,dates:2});
 });
