@@ -1,5 +1,5 @@
 import { collectionWindow, torontoParts } from './schedule';
-export const HISTORY_POLICY = { days: 56, bucketMinutes: 30, minimumDates: 1, minimumReadings: 3, maximumAgeDays: 21, improvement: 10, nearbyMinutes: 180 } as const;
+export const HISTORY_POLICY = { days: 56, bucketMinutes: 30, minimumDates: 1, minimumReadings: 3, maximumAgeDays: 21, improvement: 5, nearbyMinutes: 180 } as const;
 export type HistoricalBucket = { basis?: 'matching-weekday' | 'weekday'; facilityId: string; minute: number; percentage: number; dates: number; observations: number; firstDate: string; lastDate: string; updatedAt: string };
 export type HistoricalFacility = { id: string; baseline: HistoricalBucket | null; alternatives: (HistoricalBucket & { date: string })[] };
 export type HistoryResponse = { date: string; minute: number; state: string; message: string | null; facilities: HistoricalFacility[]; generatedAt: string; policy: typeof HISTORY_POLICY };
@@ -16,12 +16,14 @@ export function selectHistory(id: string, buckets: HistoricalBucket[], date: str
   const baseline = supported.find(b => b.minute === bucket) ?? null;
   // Rank the biggest occupancy reduction first; proximity breaks equal-value ties.
   // Never widen the window or roll a suggestion into a different date.
+  // Live-view candidates are compared with the live reading in the UI.
+  // A historical baseline must not discard a time that is quieter than live.
   const alternatives = supported.filter(b =>
     b.minute !== bucket &&
     Math.abs(b.minute - minute) <= HISTORY_POLICY.nearbyMinutes &&
     localInstant(date, b.minute).getTime() > now.getTime() &&
     (mode !== 'now' || b.minute > minute) &&
-    (!baseline || b.percentage <= baseline.percentage - HISTORY_POLICY.improvement)
+    (mode === 'now' || !baseline || b.percentage <= baseline.percentage - HISTORY_POLICY.improvement)
   ).sort((a,b) => a.percentage - b.percentage ||
     Math.abs(a.minute-minute) - Math.abs(b.minute-minute) || a.minute-b.minute
   ).slice(0,3).map(b => ({ ...b, date }));

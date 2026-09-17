@@ -157,3 +157,11 @@ it('does not borrow weekday readings for weekend suggestions',async()=>{
  expect(data.facilities[0].baseline).toBeNull();
  expect(data.facilities[0].alternatives).toEqual([]);
 });
+
+it('averages matching weekday dates equally across weeks',async()=>{
+ await seedDay('2026-09-09',1140,20,3);
+ await seedDay('2026-09-16',1140,40,6);
+ await seedDay('2026-09-15',1140,95,6);
+ const data=await (await historicalResponse(new URL('http://test/api/history?date=2026-09-23&time=19:00'),env,new Date('2026-09-17T18:00:00Z'))).json();
+ expect(data.facilities[0].baseline).toMatchObject({percentage:30,dates:2,observations:9,basis:'matching-weekday'});
+});
