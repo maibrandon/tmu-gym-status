@@ -10,6 +10,10 @@ export function localInstant(date: string, minute: number): Date {
 export function eligibleBucket(date: string, minute: number) {
   return collectionWindow(localInstant(date, minute)).state === 'open' && collectionWindow(localInstant(date, minute + 29)).state === 'open';
 }
+// The final minute of a full one-hour visit must still be within open hours.
+export function eligibleRecommendation(date: string, minute: number) {
+  return eligibleBucket(date, minute) && collectionWindow(localInstant(date, minute + 59)).state === 'open';
+}
 export function selectHistory(id: string, buckets: HistoricalBucket[], date: string, minute: number, now: Date, mode: string): HistoricalFacility {
   const bucket = Math.floor(minute / 30) * 30;
   const supported = buckets.filter(b => b.facilityId === id && b.dates >= HISTORY_POLICY.minimumDates && eligibleBucket(date, b.minute));
@@ -19,7 +23,7 @@ export function selectHistory(id: string, buckets: HistoricalBucket[], date: str
   // Live-view candidates are compared with the live reading in the UI.
   // A historical baseline must not discard a time that is quieter than live.
   const alternatives = supported.filter(b =>
-    b.minute !== bucket &&
+    b.minute !== bucket && eligibleRecommendation(date, b.minute) &&
     Math.abs(b.minute - minute) <= HISTORY_POLICY.nearbyMinutes &&
     localInstant(date, b.minute).getTime() > now.getTime() &&
     (mode !== 'now' || b.minute > minute) &&

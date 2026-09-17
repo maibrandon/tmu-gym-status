@@ -1,5 +1,6 @@
+import { OccupancySummary } from "./OccupancySummary";
 import { torontoParts } from '../shared/schedule';
-import { HISTORY_POLICY, localInstant } from '../shared/history';
+import { HISTORY_POLICY, localInstant, eligibleRecommendation } from '../shared/history';
 import { FACILITIES } from './occupancy';
 import type { HistoryResponse } from '../shared/history';
 import { useHistory } from './useHistory';
@@ -16,7 +17,7 @@ export function HistoryDetails({id,data,error,mode='later',livePercentage=null}:
   const now = new Date();
   const current = mode === 'now' ? torontoParts(now) : { date: data.date, minute: data.minute };
   // An open page may still hold a response from before a rule change or time boundary.
-  const suggestion = result?.alternatives.find(option => option.date === current.date &&
+  const suggestion = result?.alternatives.find(option => option.date === current.date && eligibleRecommendation(option.date, option.minute) &&
     Math.abs(option.minute - current.minute) <= HISTORY_POLICY.nearbyMinutes &&
     localInstant(option.date, option.minute).getTime() > now.getTime() &&
     (mode !== 'now' || (option.minute > current.minute && livePercentage !== null &&
@@ -32,12 +33,17 @@ export function HistoryDetails({id,data,error,mode='later',livePercentage=null}:
 }
 
 export function History({date,time}: {date:string;time:string}) {
-  const {data,error}=useHistory('later',date,time);
+  const response=useHistory('later',date,time);
+  const selectedMinute = Number(time.slice(0,2))*60 + Number(time.slice(3));
+  const data = response.data?.date === date && response.data.minute === selectedMinute ? response.data : null;
+  const error = response.error;
+  const loading = !data && !error;
   return <section className="mt-6" aria-label="Historical estimates">
     <p className="text-sm text-muted">Average occupancy</p>
+    {error && <p role="alert" className="mt-3 text-sm text-muted">{error}</p>}
     <ul>{FACILITIES.map(f=>{
       const baseline=data?.facilities.find(r=>r.id===f.id)?.baseline;
-      return <RevealRow key={f.id} label={`${f.name}, alternative times`} summary={<span className="flex items-center justify-between gap-4"><span>{f.name}</span><span className="shrink-0 text-muted">{baseline?`${baseline.percentage}%`:'—'}</span></span>}>
+      return <RevealRow key={f.id} label={`${f.name}, alternative times`} summary={<OccupancySummary name={f.name} percentage={data?.message || error ? null : baseline?.percentage ?? null} loading={loading} />}>
         <HistoryDetails id={f.id} data={data} error={error}/>
       </RevealRow>;
     })}</ul>
