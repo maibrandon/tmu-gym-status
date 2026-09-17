@@ -206,9 +206,9 @@ export function App() {
                         <meter
                           className="occupancy-meter"
                           data-level={
-                            percentage < 25
+                            percentage < 35
                               ? "low"
-                              : percentage < 50
+                              : percentage < 65
                                 ? "moderate"
                                 : "high"
                           }
@@ -229,8 +229,8 @@ export function App() {
                       <span className="occupancy-value">
                         {loading && !snapshot ? <span className="skeleton h-5 w-10 rounded" aria-label="Loading" /> : percentage === null ? <span className="unavailable-value">—</span> : `${percentage}%`}
                       </span>
-                      <span className="occupancy-status" data-level={percentage === null ? 'unknown' : percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'}>
-                        {percentage === null ? (loading ? 'Checking' : 'Unavailable') : percentage < 25 ? 'Quiet' : percentage < 50 ? 'Not too busy' : 'Busy'}
+                      <span className="occupancy-status" data-level={percentage === null ? 'unknown' : percentage < 35 ? 'low' : percentage < 65 ? 'moderate' : 'high'}>
+                        {percentage === null ? (loading ? 'Checking' : 'Unavailable') : percentage < 35 ? 'Quiet' : percentage < 65 ? 'Not too busy' : 'Busy'}
                       </span>
                     </span>
                   }
