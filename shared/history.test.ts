@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { selectHistory, type HistoricalBucket } from './history';
+import { selectHistory, eligibleRecommendation, type HistoricalBucket } from './history';
 const row=(minute:number,percentage:number):HistoricalBucket=>({facilityId:'mac-fitness',minute,percentage,dates:1,observations:6,firstDate:'2026-09-10',lastDate:'2026-09-10',updatedAt:'2026-09-10T23:00:00Z'});
 const future=(rows:HistoricalBucket[],minute=1080)=>selectHistory('mac-fitness',rows,'2026-09-17',minute,new Date('2026-09-11T02:00:00Z'),'later');
 it('allows exactly three hours but rejects times beyond that even with lower occupancy',()=>{
@@ -31,4 +31,24 @@ it('allows nearby earlier times when planning a future date',()=>{
 it('keeps live candidates even when they are above the historical current baseline',()=>{
  const result=selectHistory('mac-fitness',[row(780,20),row(900,41)],'2026-09-17',780,new Date('2026-09-17T17:00:00Z'),'now');
  expect(result.alternatives.map(b=>b.percentage)).toEqual([41]);
+});
+
+it('allows exactly an hour before closing but rejects later weekday and weekend visits',()=>{
+ expect(eligibleRecommendation('2026-09-17',1320)).toBe(true);
+ expect(eligibleRecommendation('2026-09-17',1321)).toBe(false);
+ expect(eligibleRecommendation('2026-09-19',1050)).toBe(true);
+ expect(eligibleRecommendation('2026-09-19',1051)).toBe(false);
+ expect(eligibleRecommendation('2026-10-12',900)).toBe(false);
+});
+it('keeps late historical baselines but excludes late recommendations',()=>{
+ const result=future([row(1260,80),row(1320,30),row(1350,0)],1260);
+ expect(result.alternatives.map(b=>b.minute)).toEqual([1320]);
+ expect(future([row(1350,20)],1350).baseline?.percentage).toBe(20);
+});
+
+it('offers the quietest remaining time separately beyond three hours, excluding closing slots',()=>{
+ const result=future([row(780,80),row(900,55),row(1320,30),row(1350,0)],780);
+ expect(result.alternatives.map(b=>b.minute)).toEqual([900]);
+ expect(result.quietestLater).toMatchObject({minute:1320,percentage:30});
+ expect(future([row(780,80),row(900,20),row(1320,30)],780).quietestLater).toBeNull();
 });

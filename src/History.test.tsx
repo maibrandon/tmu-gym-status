@@ -4,10 +4,10 @@ import { HistoryDetails } from './History';
 import { HISTORY_POLICY, type HistoryResponse } from '../shared/history';
 
 const bucket = (percentage: number, minute: number) => ({ facilityId: 'rac-fitness', percentage, minute, dates: 1, observations: 6, firstDate: '2026-09-10', lastDate: '2026-09-10', updatedAt: '2026-09-10T19:00:00Z' });
-function render(live: number | null, percentages: number[], mode: 'now' | 'later' = 'now') {
+function render(live: number | null, percentages: number[], mode: 'now' | 'later' = 'now', laterPercentage?: number) {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-17T17:00:00Z'));
-  const data: HistoryResponse = { date: '2026-09-17', minute: 780, state: 'open', message: null, generatedAt: new Date().toISOString(), policy: HISTORY_POLICY, facilities: [{ id: 'rac-fitness', baseline: bucket(85, 780), alternatives: percentages.map((percentage, i) => ({ ...bucket(percentage, 900 + i * 30), date: '2026-09-17' })) }] };
+  const data: HistoryResponse = { date: '2026-09-17', minute: 780, state: 'open', message: null, generatedAt: new Date().toISOString(), policy: HISTORY_POLICY, facilities: [{ id: 'rac-fitness', quietestLater: laterPercentage === undefined ? null : {...bucket(laterPercentage,1320),date:'2026-09-17'}, baseline: bucket(85, 780), alternatives: percentages.map((percentage, i) => ({ ...bucket(percentage, 900 + i * 30), date: '2026-09-17' })) }] };
   return renderToStaticMarkup(<HistoryDetails id="rac-fitness" data={data} error={null} mode={mode} livePercentage={live} />);
 }
 afterEach(() => vi.useRealTimers());
@@ -35,4 +35,11 @@ it('shows the requested message when no alternative qualifies', () => {
 
 it('does not claim now is least busy when matching history is missing', () => {
   expect(render(46, [])).toContain('No recorded times in this three-hour window yet.');
+});
+
+it('adds a distant estimate only when it also improves on live occupancy',()=>{
+ expect(render(60,[50],'now',30)).toContain('least busy time remaining today');
+ expect(render(60,[50],'now',30)).toContain('10 PM');
+ expect(render(30,[20],'now',40)).not.toContain('least busy time remaining today');
+ expect(render(null,[],'now',20)).not.toContain('least busy time remaining today');
 });

@@ -158,3 +158,8 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .occupancy-fill { display: block; height: 100%; border-radius: inherit; background: var(--meter-fill); transform-origin: left center; animation: occupancy-fill-in 550ms cubic-bezier(.2,.7,.2,1) both; }
 @keyframes occupancy-fill-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .occupancy-fill { animation: none; } }
+
+.facility-summary { position: relative; padding-right: 26px; }
+.disclosure-chevron { position: absolute; right: 0; top: 50%; width: 14px; height: 14px; color: var(--color-muted); transform: translateY(-50%); transition: transform 240ms ease; }
+.reveal-row[data-open="true"] .disclosure-chevron { transform: translateY(-50%) rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
