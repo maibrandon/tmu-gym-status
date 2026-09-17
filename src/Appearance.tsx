@@ -14,8 +14,9 @@ export function Appearance() {
       root.dataset.appearance = appearance;
       root.dataset.theme = dark ? 'dark' : 'light';
       root.style.colorScheme = dark ? 'dark' : 'light';
-      root.style.backgroundColor = dark ? '#15181d' : '#f8fafb';
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#15181d' : '#f8fafb');
+      root.style.removeProperty('background-color');
+      const background = getComputedStyle(root).getPropertyValue('--page').trim();
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
     };
     apply();
     media.addEventListener('change', apply);

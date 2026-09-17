@@ -87,35 +87,23 @@ export function App() {
   }, []);
 
   return (
-    <main className="mx-auto w-full max-w-[640px] px-5 pb-8 pt-7 sm:px-8 sm:pt-14">
-      <header className="mb-9 flex items-center justify-between gap-4">
-        <a
-          href="./"
-          className="brand flex items-center gap-2.5"
-          aria-label="TMU Gym Status home"
-        >
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M5 9v6m4-9v12m6-12v12m4-9v6M9 12h6"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-          <span>
-            TMU <span className="font-normal text-muted">/ Gym status</span>
-          </span>
+    <main className="page-shell">
+      <header className="site-header">
+        <a href="./" className="brand" aria-label="TMU Gym Status home">
+          should i go gym?
         </a>
-        <span className="text-sm text-muted">Toronto</span>
+        <span className="location-label">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5"/></svg>
+          Toronto, ON
+        </span>
       </header>
 
-      <h1 className="mb-6 text-[2.125rem] font-semibold leading-tight tracking-[-0.045em] sm:text-[2.625rem]">
-        Let’s go gym.
-      </h1>
+      <div className="hero">
+        <p className="eyebrow">Live gym occupancy <span aria-hidden="true">·</span> TMU</p>
+        <h1>we gotta lock in.</h1>
+      </div>
       <div
-        className="mode-switch mb-7"
+        className="mode-switch"
         role="group"
         aria-label="When do you want to go?"
       >
@@ -125,7 +113,7 @@ export function App() {
           onClick={() => setMode("now")}
           className={mode === "now" ? "selected" : ""}
         >
-          Let’s go gym now
+          Right now
         </button>
         <button
           type="button"
@@ -139,16 +127,16 @@ export function App() {
 
       {mode === "now" ? (
         <section aria-labelledby="occupancy-heading">
-          <div className="mb-1 flex items-start justify-between gap-4">
+          <div className="section-heading">
             <div>
-              <h2 id="occupancy-heading" className="text-base font-semibold">
-                Current occupancy
+              <h2 id="occupancy-heading" className="section-title">
+                Live occupancy
               </h2>
               <p className="mt-1 text-sm text-muted" role="status">
                 {loading
                   ? "Checking occupancy…"
                   : snapshot?.checkedAt
-                    ? `Last collected ${clock.format(snapshot.checkedAt)} ET`
+                    ? `Last updated ${clock.format(snapshot.checkedAt)} ET`
                     : "Readings unavailable"}
                 {!loading && snapshot && (stale || error)
                   ? " · May be outdated"
@@ -205,33 +193,9 @@ export function App() {
                   key={facility.id}
                   label={`${facility.name}, alternative times`}
                   summary={
-                    <>
-                      <div className="mb-3 flex items-center justify-between gap-5">
-                        <span className="max-w-[75%] text-base font-medium leading-snug">
-                          {facility.name}
-                        </span>
-                        {loading && !snapshot ? (
-                          <span
-                            className="skeleton h-7 w-12 rounded"
-                            aria-label="Loading"
-                          />
-                        ) : (
-                          <span className="shrink-0 text-[1.625rem] font-semibold leading-none tracking-[-0.04em] tabular-nums">
-                            {percentage === null ? (
-                              <span className="text-sm font-normal tracking-normal text-muted">
-                                Unavailable
-                              </span>
-                            ) : (
-                              <>
-                                {percentage}
-                                <span className="ml-0.5 text-sm font-medium text-muted">
-                                  %
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        )}
-                      </div>
+                    <span className="occupancy-row">
+                      <span className="facility-name">{facility.name}</span>
+                      <span className="row-meter">
                       {percentage !== null ? (
                         <meter
                           className="occupancy-meter"
@@ -255,7 +219,14 @@ export function App() {
                           aria-hidden="true"
                         />
                       )}
-                    </>
+                      </span>
+                      <span className="occupancy-value">
+                        {loading && !snapshot ? <span className="skeleton h-5 w-10 rounded" aria-label="Loading" /> : percentage === null ? <span className="unavailable-value">—</span> : `${percentage}%`}
+                      </span>
+                      <span className="occupancy-status" data-level={percentage === null ? 'unknown' : percentage < 25 ? 'low' : percentage < 50 ? 'moderate' : 'high'}>
+                        {percentage === null ? (loading ? 'Checking' : 'Unavailable') : percentage < 25 ? 'Quiet' : percentage < 50 ? 'Not too busy' : 'Busy'}
+                      </span>
+                    </span>
                   }
                 >
                   <HistoryDetails
@@ -268,9 +239,8 @@ export function App() {
               );
             })}
           </ul>
-          <p className="mt-4 text-sm leading-relaxed text-muted">
-            Fetched from TMU when you open this page or refresh, during
-            collection hours. Readings may lag behind the gym.
+          <p className="reading-note">
+            Readings from TMU may lag behind the gym.
           </p>
         </section>
       ) : (
@@ -308,7 +278,7 @@ export function App() {
           </div>
         </section>
       )}
-      <footer className="mt-9 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-sm text-muted">
+      <footer className="site-footer">
         <span>An unofficial student project — not affiliated with TMU.</span>
         <a
           className="source-link"
@@ -316,9 +286,9 @@ export function App() {
           target="_blank"
           rel="noreferrer"
         >
-          Data source <span aria-hidden="true">↗</span>
+          Data from TMU <span aria-hidden="true">↗</span>
         </a>
-        <div className="w-full">
+        <div className="footer-appearance">
           <Appearance />
         </div>
       </footer>

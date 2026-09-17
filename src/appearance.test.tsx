@@ -31,7 +31,7 @@ beforeEach(() => {
   localStorage.clear();
   dark = true;
   listeners = new Set();
-  document.head.innerHTML = '<meta name="theme-color" content="#f8fafb">';
+  document.head.innerHTML = '<meta name="theme-color" content="#fdfdfc">';
   document.body.innerHTML = '<div id="root"></div>';
   vi.stubGlobal('matchMedia', () => ({ get matches() { return dark; }, addEventListener: (_: string, listener: () => void) => listeners.add(listener), removeEventListener: (_: string, listener: () => void) => listeners.delete(listener) }));
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({readings: [], checkedAt: null, stale: false, collectionState: 'open', message: null}))));
@@ -48,11 +48,12 @@ it('sets the saved appearance before React mounts', () => {
   window.eval(boot);
   expect(theme()).toBe('light');
   expect(document.documentElement.style.colorScheme).toBe('light');
-  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#f8fafb');
+  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#fdfdfc');
 });
 it('tracks system changes, preserves explicit choices, and never refetches for appearance', async () => {
   await mount();
   expect(theme()).toBe('dark');
+  expect(document.documentElement.style.backgroundColor).toBe('');
   await changeSystem(false);
   expect(theme()).toBe('light');
   await choose('dark');

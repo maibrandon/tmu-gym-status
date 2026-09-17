@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8fafb" />
+    <meta name="theme-color" content="#fdfdfc" />
     <script>
       (() => {
         let preference = 'system';
@@ -15,8 +15,8 @@
         document.documentElement.dataset.appearance = preference;
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-        document.documentElement.style.backgroundColor = dark ? '#15181d' : '#f8fafb';
-        document.querySelector('meta[name="theme-color"]').content = dark ? '#15181d' : '#f8fafb';
+        document.documentElement.style.backgroundColor = dark ? '#181818' : '#fdfdfc';
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#181818' : '#fdfdfc';
       })();
     </script>
     <meta name="description" content="Check current occupancy across all six TMU gym spaces, at a glance." />
