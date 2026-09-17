@@ -8,9 +8,10 @@ const label = (minute: number) => `${Math.floor(minute / 60) % 12 || 12}${minute
 const weekday = new Intl.DateTimeFormat('en-CA', { weekday: 'long', timeZone: 'America/Toronto' });
 const calendarDate = new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'America/Toronto' });
 
-export function HistoryDetails({id,data,error,mode='later'}: {id:string;data:HistoryResponse|null;error:string|null;mode?:'now'|'later'}) {
+export function HistoryDetails({id,data,error,mode='later',livePercentage=null}: {id:string;data:HistoryResponse|null;error:string|null;mode?:'now'|'later';livePercentage?:number|null}) {
   if (error) return <p className="text-sm text-muted">Suggestions are unavailable right now.</p>;
   if (!data) return <p className="text-sm text-muted">Finding another time…</p>;
+  if (mode === 'now' && livePercentage === null) return <p className="text-sm text-muted">A current reading is needed to compare quieter times.</p>;
   const result = data.facilities.find(f => f.id === id);
   const now = new Date();
   const current = mode === 'now' ? torontoParts(now) : { date: data.date, minute: data.minute };
@@ -18,9 +19,10 @@ export function HistoryDetails({id,data,error,mode='later'}: {id:string;data:His
   const suggestion = result?.alternatives.find(option => option.date === current.date &&
     Math.abs(option.minute - current.minute) <= HISTORY_POLICY.nearbyMinutes &&
     localInstant(option.date, option.minute).getTime() > now.getTime() &&
-    (mode !== 'now' || option.minute > current.minute));
+    (mode !== 'now' || (option.minute > current.minute && livePercentage !== null &&
+      option.percentage <= livePercentage - HISTORY_POLICY.improvement)));
   if (data.message) return <p className="text-sm text-muted">Suggestions aren’t available for this time.</p>;
-  if (!suggestion) return <p className="text-sm text-muted">{result?.baseline ? 'No quieter time found within three hours.' : 'No recorded times in this three-hour window yet.'}</p>;
+  if (!suggestion) return <p className="text-sm text-muted">{(mode === 'now' || result?.baseline) ? 'It looks like this is the least busy time within the next 3 hours!' : 'No recorded times in this three-hour window yet.'}</p>;
   const date = new Date(`${suggestion.date}T12:00:00Z`);
   const time = label(suggestion.minute);
   return <div className="text-sm">

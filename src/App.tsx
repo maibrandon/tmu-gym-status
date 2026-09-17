@@ -238,6 +238,7 @@ export function App() {
                 >
                   <HistoryDetails
                     mode="now"
+                    livePercentage={stale || error ? null : percentage}
                     id={facility.id}
                     data={history.data}
                     error={history.error}

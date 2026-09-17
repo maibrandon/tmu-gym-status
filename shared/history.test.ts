@@ -14,8 +14,8 @@ it('never rolls past times into next week',()=>{
  const result=selectHistory('mac-fitness',[row(1080,35)],'2026-09-10',1320,new Date('2026-09-11T02:00:00Z'),'now');
  expect(result.alternatives).toEqual([]);
 });
-it('requires ten percentage points improvement when a baseline exists',()=>{
- expect(future([row(1080,30),row(1110,25),row(1140,15)]).alternatives.map(b=>b.minute)).toEqual([1140]);
+it('requires five percentage points improvement when a baseline exists',()=>{
+ expect(future([row(1080,30),row(1110,26),row(1140,25)]).alternatives.map(b=>b.minute)).toEqual([1140]);
 });
 it('ranks the greatest reduction first and breaks ties by shortest time shift',()=>{
  expect(future([row(1080,80),row(1110,40),row(1200,20),row(1260,20)]).alternatives.map(b=>b.minute)).toEqual([1200,1260,1110]);
@@ -26,4 +26,9 @@ it('offers only later times for now and respects the exact selected minute',()=>
 });
 it('allows nearby earlier times when planning a future date',()=>{
  expect(future([row(1080,80),row(1020,20)]).alternatives[0]).toMatchObject({minute:1020,date:'2026-09-17'});
+});
+
+it('keeps live candidates even when they are above the historical current baseline',()=>{
+ const result=selectHistory('mac-fitness',[row(780,20),row(900,41)],'2026-09-17',780,new Date('2026-09-17T17:00:00Z'),'now');
+ expect(result.alternatives.map(b=>b.percentage)).toEqual([41]);
 });
