@@ -22,7 +22,7 @@ export function HistoryDetails({id,data,error,mode='later',livePercentage=null}:
     (mode !== 'now' || (option.minute > current.minute && livePercentage !== null &&
       option.percentage <= livePercentage - HISTORY_POLICY.improvement)));
   if (data.message) return <p className="text-sm text-muted">Suggestions aren’t available for this time.</p>;
-  if (!suggestion) return <p className="text-sm text-muted">{(mode === 'now' || result?.baseline) ? 'It looks like this is the least busy time within the next 3 hours!' : 'No recorded times in this three-hour window yet.'}</p>;
+  if (!suggestion) return <p className="text-sm text-muted">{(mode === 'now' ? Boolean(result?.alternatives.length) : Boolean(result?.baseline)) ? 'It looks like this is the least busy time within the next 3 hours!' : 'No recorded times in this three-hour window yet.'}</p>;
   const date = new Date(`${suggestion.date}T12:00:00Z`);
   const time = label(suggestion.minute);
   return <div className="text-sm">

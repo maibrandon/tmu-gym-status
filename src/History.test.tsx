@@ -32,3 +32,7 @@ it('keeps future planning comparisons based on history', () => {
 it('shows the requested message when no alternative qualifies', () => {
   expect(render(46, [62])).toContain('It looks like this is the least busy time within the next 3 hours!');
 });
+
+it('does not claim now is least busy when matching history is missing', () => {
+  expect(render(46, [])).toContain('No recorded times in this three-hour window yet.');
+});
