@@ -43,3 +43,24 @@ it('adds a distant estimate only when it also improves on live occupancy',()=>{
  expect(render(30,[20],'now',40)).not.toContain('least busy time remaining today');
  expect(render(null,[],'now',20)).not.toContain('least busy time remaining today');
 });
+
+it.each([
+ ['2026-09-19T01:59:00Z',null],
+ ['2026-09-19T02:00:00Z','The gym closes at 11 PM today.'],
+ ['2026-09-19T02:59:00Z','The gym closes at 11 PM today.'],
+ ['2026-09-19T03:00:00Z','The gym is closed now.'],
+ ['2026-09-19T21:30:00Z','The gym closes at 6:30 PM today.'],
+ ['2026-09-19T22:30:00Z','The gym is closed now.'],
+ ['2026-09-19T12:00:00Z','The gym is closed now.'],
+ ['2026-12-19T03:00:00Z','The gym closes at 11 PM today.'],
+])('uses schedule-aware copy at %s even when readings are unavailable', (instant,message)=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date(instant));
+ const html=renderToStaticMarkup(<HistoryDetails id="rac-fitness" data={null} error="fetch failed" mode="now" livePercentage={null}/>);
+ if(message) expect(html).toContain(message);
+ else expect(html).not.toContain('The gym closes');
+});
+it('does not mistake a holiday collection exclusion for a confirmed closure',()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-12T18:00:00Z'));
+ const html=renderToStaticMarkup(<HistoryDetails id="rac-fitness" data={null} error={null} mode="now"/>);
+ expect(html).not.toContain('The gym is closed');
+});

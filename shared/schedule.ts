@@ -53,17 +53,19 @@ export function torontoParts(now: Date) {
   return { date, year: Number(parts.year), weekday: new Date(`${date}T12:00:00Z`).getUTCDay(),
     minute: Number(parts.hour) * 60 + Number(parts.minute) };
 }
+export function operatingHours(weekday: number) {
+  const weekend = weekday === 0 || weekday === 6;
+  return { open: weekend ? 9 * 60 : 6 * 60 + 30, close: weekend ? 18 * 60 + 30 : 23 * 60 };
+}
 export type CollectionState = 'open' | 'outside_hours' | 'holiday' | 'not_started' | 'paused';
 export function collectionWindow(now: Date): { state: CollectionState; reason: string | null } {
   const local = torontoParts(now);
   if (local.date < SCHEDULE_START) return { state: 'not_started', reason: 'Collection has not started yet.' };
   const holiday = EXTRA_EXCLUDED_DATES[local.date] ?? holidayCalendar(local.year).get(local.date);
   if (holiday) return { state: 'holiday', reason: `Collection paused for ${holiday}.` };
-  const weekend = local.weekday === 0 || local.weekday === 6;
-  const open = weekend ? 9 * 60 : 6 * 60 + 30;
-  const close = weekend ? 18 * 60 + 30 : 23 * 60;
+  const { open, close } = operatingHours(local.weekday);
   if (local.minute < open || local.minute >= close) return {
-    state: 'outside_hours', reason: 'Outside collection hours: weekdays 6:30 AM–11 PM; weekends 9 AM–6:30 PM (Toronto).',
+    state: 'outside_hours', reason: 'The gym is closed now.',
   };
   return { state: 'open', reason: null };
 }
