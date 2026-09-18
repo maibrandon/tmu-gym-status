@@ -1,5 +1,5 @@
 import { OccupancySummary } from "./OccupancySummary";
-import { torontoParts } from "../shared/schedule";
+import { torontoParts, collectionWindow } from "../shared/schedule";
 import { useHistory } from "./useHistory";
 import { RevealRow } from "./RevealRow";
 import { HistoryDetails, History } from "./History";
@@ -39,6 +39,7 @@ export function App() {
       (snapshot.checkedAt !== null &&
         now - snapshot.checkedAt.getTime() >= 10 * 60_000));
 
+  const closed = collectionWindow(new Date(now)).state === 'outside_hours';
   const history = useHistory("now", undefined, undefined, snapshot?.checkedAt, !loading && mode === "now");
 
   async function load() {
@@ -134,7 +135,7 @@ export function App() {
                 Live occupancy
               </h2>
               <p className="mt-1 text-sm text-muted" role="status">
-                {loading
+                {closed ? 'The gym is closed now.' : loading
                   ? "Checking occupancy…"
                   : snapshot?.checkedAt
                     ? `Last updated ${clock.format(snapshot.checkedAt)} ET`
@@ -164,7 +165,7 @@ export function App() {
             </button>
           </div>
 
-          {snapshot?.message && (
+          {!closed && snapshot?.message && (
             <p
               role="status"
               className="mt-5 text-sm leading-relaxed text-muted"
@@ -172,7 +173,7 @@ export function App() {
               {snapshot.message}
             </p>
           )}
-          {error && (
+          {!closed && error && (
             <div role="alert" className="error-message mt-5">
               {error}
               {snapshot && " Showing the last successful readings."}
@@ -190,7 +191,7 @@ export function App() {
               const expired =
                 snapshot?.checkedAt == null ||
                 now - snapshot.checkedAt.getTime() > 30 * 60_000;
-              const percentage = expired
+              const percentage = closed || expired
                 ? null
                 : (snapshot?.readings.find(
                     (reading) => reading.id === facility.id,

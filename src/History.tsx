@@ -1,5 +1,5 @@
 import { OccupancySummary } from "./OccupancySummary";
-import { torontoParts } from '../shared/schedule';
+import { torontoParts, collectionWindow, operatingHours } from '../shared/schedule';
 import { HISTORY_POLICY, localInstant, eligibleRecommendation } from '../shared/history';
 import { FACILITIES } from './occupancy';
 import type { HistoryResponse } from '../shared/history';
@@ -9,11 +9,20 @@ const label = (minute: number) => `${Math.floor(minute / 60) % 12 || 12}${minute
 const weekday = new Intl.DateTimeFormat('en-CA', { weekday: 'long', timeZone: 'America/Toronto' });
 
 export function HistoryDetails({id,data,error,mode='later',livePercentage=null}: {id:string;data:HistoryResponse|null;error:string|null;mode?:'now'|'later';livePercentage?:number|null}) {
+  const now = new Date();
+  const scheduleTime = mode === 'now' ? now : data ? localInstant(data.date,data.minute) : null;
+  if (scheduleTime) {
+    const window = collectionWindow(scheduleTime);
+    if (window.state === 'outside_hours') return <p className="text-sm text-muted">{mode === 'now' ? 'The gym is closed now.' : 'The gym is closed at this time.'}</p>;
+    const local = torontoParts(scheduleTime);
+    const { close } = operatingHours(local.weekday);
+    if (mode === 'now' && window.state === 'open' && local.minute >= close - 60)
+      return <p className="text-sm text-muted">The gym closes at {label(close)} today.</p>;
+  }
   if (error) return <p className="text-sm text-muted">Suggestions are unavailable right now.</p>;
   if (!data) return <p className="text-sm text-muted">Finding another time…</p>;
   if (mode === 'now' && livePercentage === null) return <p className="text-sm text-muted">A current reading is needed to compare quieter times.</p>;
   const result = data.facilities.find(f => f.id === id);
-  const now = new Date();
   const current = mode === 'now' ? torontoParts(now) : { date: data.date, minute: data.minute };
   // An open page may still hold a response from before a rule change or time boundary.
   const suggestion = result?.alternatives.find(option => option.date === current.date && eligibleRecommendation(option.date, option.minute) &&
