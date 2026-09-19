@@ -15,22 +15,23 @@ TMU publishes occupancy for several recreation spaces, but deciding when to go m
 - Reveals quieter alternatives when you hover, focus, or tap a facility. Suggestions compare historical averages with the current reading.
 - Lets you choose a future Toronto-local date and time and see estimated occupancy using the same bar layout.
 - Supports light, dark, and system appearance, remembers your preference, and respects reduced motion.
-- Shares collected readings across visitors. Opening the page or pressing Refresh never triggers a new TMU scrape.
+- Shares readings across visitors for five minutes. If scheduled collection falls behind, opening the page or pressing Refresh can recover a live reading through the same coordinated collector.
 
 The six spaces are MAC Fitness Centre, RAC Fitness Centre, RAC 1 Gym (LL3), RAC II Gym (LL3), RAC Cardio & Strength Circuit Room, and RAC Functional Training Room.
 
 ## Architecture
 
-The frontend and API run on the same Cloudflare Worker deployment. The browser reads saved results through the app’s API. Only the scheduled collector fetches and parses TMU’s HTML, so visitor traffic does not increase requests to TMU.
+The frontend and API run on the same Cloudflare Worker deployment. The browser reads results through the app’s API. Cron and live requests share a database lease: one collector fetches TMU when the snapshot needs refreshing, while other visitors reuse the saved result.
 
 ```mermaid
 flowchart LR
     Browser[React frontend] --> Live[Worker: live occupancy API]
     Live --> Snapshot[(D1 latest snapshot)]
+    Live -->|Missing or older than 5 minutes| Collector
     Cron[Cloudflare Cron: every 5 minutes] --> Collector[Worker: collector]
     Collector --> TMU[TMU occupancy page]
     Collector --> Snapshot
-    Collector --> Summaries
+    HistoryCron[Cloudflare Cron: every 30 minutes] --> Summaries
     Collector --> DB[(D1 historical observations)]
     DB --> Summaries[Daily summaries and weekday averages]
     Summaries --> Averages
@@ -38,11 +39,11 @@ flowchart LR
     History --> Averages[(D1 cached averages)]
 ```
 
-Live requests return the latest collected snapshot. The scheduled collector atomically saves that snapshot and new historical observations to D1, then updates daily summaries and reusable weekday averages. Each visitor endpoint reads one saved record instead of fetching TMU or aggregating raw observations. Visitor requests neither scrape TMU nor add historical samples, so traffic does not bias the dataset.
+Live requests reuse snapshots younger than five minutes. Cron allows fifteen seconds of scheduling tolerance so source latency does not cause it to skip alternate five-minute ticks. When a refresh is needed, the collector parses TMU’s HTML with native HTMLRewriter and atomically saves the snapshot and historical observations to D1. Concurrent cold requests briefly wait for that shared result. Observations are deduplicated by facility and five-minute slot; cache hits never create samples. A separate scheduled invocation updates daily summaries and reusable weekday averages every thirty minutes, keeping that work out of live collection and visitor requests.
 
-Refresh rereads the shared snapshot. Readings become stale after ten minutes or a failed collection and become unavailable after thirty minutes. Failed collection preserves the previous snapshot; partial collections explicitly mark missing facilities unavailable. Historical averages expire after 24 hours without a successful refresh, independently of live readings.
+Refresh uses the same five-minute freshness rule. Failed attempts have a shared one-minute retry cooldown, and abandoned collector leases expire after one minute. Readings become stale after ten minutes or a failed collection and become unavailable after thirty minutes. Failed collection preserves the previous snapshot; partial collections explicitly mark missing facilities unavailable. Historical averages expire after 24 hours without a successful refresh, independently of live readings.
 
-Collection runs use unique five-minute slots and a database lock to prevent duplicate scheduled work. Failed fetches and missing values remain gaps; they never become zero occupancy or fabricated observations. Collection follows Toronto time and excludes configured Ontario holidays, including Civic Holiday. A collection exclusion does not necessarily mean the gym is closed.
+Cron and visitor recovery share the same database lock, with ownership checks on publication to prevent an expired collector from overwriting a newer result. Failed fetches and missing values remain gaps; they never become zero occupancy or fabricated observations. Collection follows Toronto time and excludes configured Ontario holidays, including Civic Holiday. A collection exclusion does not necessarily mean the gym is closed.
 
 ## Learning from the data
 

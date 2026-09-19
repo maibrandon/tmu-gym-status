@@ -5,19 +5,26 @@ import { collect } from '../worker/collector';
 import worker from '../worker/index';
 import { FACILITIES } from '../shared/facilities';
 
+import { createSourceRuntime } from './source-runtime';
+let parser: Awaited<ReturnType<typeof createSourceRuntime>>;
+vi.mock('../worker/source', () => ({
+  fetchLiveReadings: async (request: typeof fetch = fetch) => parser.parse(await request('https://recportal.torontomu.ca/FacilityOccupancy')),
+}));
+
 let runtime: Miniflare;
 let env: Env;
 const now = new Date('2026-09-10T18:00:00Z');
 const html = FACILITIES.map((facility, i) => `<div class="occupancy-card"><h2>${facility.name}</h2><p class="occupancy-count">${i * 10}%</p></div>`).join('');
 const source = () => new Response(html, { headers: { 'content-type': 'text/html' } });
 beforeAll(async () => {
+  parser = await createSourceRuntime();
   runtime = new Miniflare(convertV4MiniflareOptions({ name: 'test', compatibilityDate: '2026-09-10', modules: true, script: 'export default {fetch(){return new Response("test")}}', d1Databases: ['DB'] }));
   const db = await runtime.getD1Database('DB');
   const statements = readdirSync('migrations').filter(f=>f.endsWith('.sql')).sort().flatMap(f=>readFileSync(`migrations/${f}`, 'utf8').split(';').map(s=>s.trim()).filter(Boolean));
   for (const statement of statements) await db.prepare(statement).run();
   env = { DB: db, COLLECTION_ENABLED: 'true' } as Env;
 }, 30000);
-afterAll(async () => { await runtime?.dispose(); });
+afterAll(async () => { await runtime?.dispose(); await parser?.dispose(); });
 beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM history_daily_buckets'), env.DB.prepare('DELETE FROM latest_snapshot'), env.DB.prepare('DELETE FROM history_aggregates'),
@@ -68,17 +75,17 @@ describe('collector with local D1', () => {
     const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
     expect(data.readings.map((r:{percentage:number|null})=>r.percentage)).toEqual([40,null,null,null,null,null]);
   });
-  it('serves 100 cold requests without contacting TMU or writing observations', async () => {
-    const request = vi.fn(); vi.stubGlobal('fetch',request);
+  it('coalesces 100 cold requests into one live fetch and shares its snapshot', async () => {
+    const request = vi.fn(async () => source()); vi.stubGlobal('fetch',request);
     const responses = await Promise.all(Array.from({length:100},()=>worker.fetch(new Request('http://localhost/api/occupancy'),env)));
     for (const response of responses) {
       const data = await response.json();
-      expect(data.checkedAt).toBeNull();
-      expect(data.readings.every((r:{percentage:number|null})=>r.percentage===null)).toBe(true);
+      expect(data.checkedAt).toBe(now.toISOString());
+      expect(data.readings.map((r:{percentage:number|null})=>r.percentage)).toEqual([0,10,20,30,40,50]);
     }
-    expect(request).not.toHaveBeenCalled();
-    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(0);
-  });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(6);
+  }, 30000);
   it('serves 100 warm requests from one collection without changing timestamps or history', async()=>{
     const upstream=vi.fn(async()=>source());
     await collect(env,now,upstream);
@@ -88,9 +95,10 @@ describe('collector with local D1', () => {
     expect(upstream).toHaveBeenCalledTimes(1);expect(request).not.toHaveBeenCalled();
     expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(6);
   });
-  it.each([[9.999,false,true],[10,true,true],[30,true,true],[30.001,false,false]])('enforces snapshot age %s minutes',async(minutes,stale,available)=>{
+  it.each([[9.999,true,true],[10,true,true],[30,true,true],[30.001,false,false]])('enforces snapshot age %s minutes',async(minutes,stale,available)=>{
     await collect(env,now,async()=>source());
     vi.setSystemTime(new Date(now.getTime()+Number(minutes)*60000));
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response('error',{status:503})));
     const data=await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
     expect(data.stale).toBe(stale);
     expect(data.checkedAt).toBe(available?now.toISOString():null);
@@ -112,10 +120,11 @@ describe('collector with local D1', () => {
     expect(data.readings.every((r: { percentage: number | null }) => r.percentage === null)).toBe(true);
     expect(data.checkedAt).toBe(null);
   });
-  it('does not contact a failing upstream on visitor requests', async () => {
+  it('backs off after a visitor-triggered upstream failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('error', { status: 503 })));
     expect((await worker.fetch(new Request('http://localhost/api/occupancy'), env)).status).toBe(200);
-    expect(fetch).not.toHaveBeenCalled();
+    expect((await worker.fetch(new Request('http://localhost/api/occupancy'), env)).status).toBe(200);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('does not collect while the operator pause switch is off', async () => {
     const request = vi.fn();
@@ -246,4 +255,79 @@ it('retains prior daily summaries while updating newly completed buckets',async(
  await refreshAggregates(env,new Date('2026-09-17T23:00:00Z'));
  const data=await (await cachedHistoricalResponse(new URL('http://test/api/history?date=2026-09-24&time=18:00'),env,new Date('2026-09-17T23:00:00Z'))).json();
  expect(data.facilities[0].baseline).toMatchObject({percentage:50,dates:2});
+});
+
+
+describe('coordinated live recovery', () => {
+  it('fetches at 6:21 PM Saturday and does not fetch at 6:30 PM', async () => {
+    vi.setSystemTime(new Date('2026-09-19T22:21:00Z'));
+    const request = vi.fn(async () => source()); vi.stubGlobal('fetch', request);
+    const result = await (await worker.fetch(new Request('http://localhost/api/occupancy'), env)).json();
+    expect(result.checkedAt).toBe('2026-09-19T22:21:00.000Z');
+    expect(result.readings[0].percentage).toBe(0);
+    vi.setSystemTime(new Date('2026-09-19T22:30:00Z'));
+    const closed = await (await worker.fetch(new Request('http://localhost/api/occupancy'), env)).json();
+    expect(closed.collectionState).toBe('outside_hours');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  it('refreshes at five minutes, sharing the lease with Cron', async () => {
+    const request = vi.fn(async () => source()); vi.stubGlobal('fetch', request);
+    await collect(env, now, request);
+    vi.setSystemTime(new Date(now.getTime()+299999));
+    await worker.fetch(new Request('http://localhost/api/occupancy'), env);
+    expect(request).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date(now.getTime()+300000));
+    await Promise.all([collect(env), ...Array.from({length:25}, () => worker.fetch(new Request('http://localhost/api/occupancy'), env))]);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(12);
+  });
+  it('retries a failed slot after cooldown and recovers an abandoned lease', async () => {
+    const request = vi.fn(async () => new Response('error',{status:503}));
+    await expect(collect(env, now, request)).rejects.toThrow();
+    await collect(env, now, request);
+    expect(request).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date(now.getTime()+60000));
+    await collect(env, new Date(), async () => source());
+    expect((await env.DB.prepare('SELECT status FROM collection_runs').first())?.status).toBe('success');
+    vi.setSystemTime(new Date(now.getTime()+360000));
+    await env.DB.prepare('UPDATE collector_lock SET token=?,lease_until=?').bind('crashed',Date.now()-1).run();
+    await collect(env, new Date(), async () => source());
+    expect((await env.DB.prepare('SELECT * FROM observations').all()).results).toHaveLength(12);
+  });
+  it('rejects publication from a collector whose lease has been replaced', async () => {
+    await collect(env, now, async () => {
+      await env.DB.prepare('UPDATE collector_lock SET token=?,lease_until=?').bind('successor',now.getTime()+60000).run();
+      return source();
+    });
+    expect(await env.DB.prepare('SELECT * FROM latest_snapshot').first()).toBeNull();
+    expect((await env.DB.prepare('SELECT token FROM collector_lock').first())?.token).toBe('successor');
+  });
+});
+
+
+it('refreshes on the next Cron tick even when the previous fetch finished a second late', async () => {
+  const initial = new Date(now.getTime()+1000); vi.setSystemTime(initial);
+  await collect(env, initial, async () => source());
+  vi.setSystemTime(new Date(now.getTime()+300000));
+  const request = vi.fn(async () => source()); vi.stubGlobal('fetch', request);
+  await worker.scheduled({cron:'*/5 * * * *'} as ScheduledController, env);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+it('does not run aggregation on the live collection Cron', async () => {
+  const request = vi.fn(async () => source()); vi.stubGlobal('fetch', request);
+  await worker.scheduled({cron:'*/5 * * * *'} as ScheduledController, env);
+  expect((await env.DB.prepare('SELECT * FROM history_aggregates').all()).results).toHaveLength(0);
+  await worker.scheduled({cron:'2,32 * * * *'} as ScheduledController, env);
+  expect((await env.DB.prepare('SELECT * FROM history_aggregates').all()).results).toHaveLength(7);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+it('returns the closed state when a refresh completes after closing', async () => {
+  vi.setSystemTime(new Date('2026-09-19T22:29:59Z'));
+  vi.stubGlobal('fetch', vi.fn(async () => {
+    vi.setSystemTime(new Date('2026-09-19T22:30:01Z'));
+    return source();
+  }));
+  const data = await (await worker.fetch(new Request('http://localhost/api/occupancy'),env)).json();
+  expect(data.collectionState).toBe('outside_hours');
+  expect(data.checkedAt).toBeNull();
 });

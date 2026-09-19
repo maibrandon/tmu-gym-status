@@ -1,11 +1,11 @@
 import { FACILITIES } from '../shared/facilities';
-import { HISTORY_POLICY, eligibleBucket, type HistoricalBucket } from '../shared/history';
-import { torontoParts } from '../shared/schedule';
+import { HISTORY_POLICY, localInstant, type HistoricalBucket } from '../shared/history';
+import { collectionWindow, operatingHours, torontoParts } from '../shared/schedule';
 
 export const AGGREGATE_MAX_AGE_MS = 24 * 60 * 60_000;
 type DailyBucket = { facility_id: string; local_date: string; weekday: number; minute: number; percentage: number; observations: number; updatedAt: string };
 
-// Runs only in scheduled collection, never on a visitor request.
+// Runs in a separate scheduled invocation, never on a visitor request.
 export async function refreshAggregates(env: Env, now = new Date()) {
   const local = torontoParts(now);
   const dayOffset = (days: number) => new Date(new Date(`${local.date}T12:00:00Z`).getTime() - days * 86400000).toISOString().slice(0,10);
@@ -14,7 +14,7 @@ export async function refreshAggregates(env: Env, now = new Date()) {
   const previous = await env.DB.prepare('SELECT generated_at FROM history_aggregates WHERE weekday = 0').first<{generated_at:string}>();
   // Bootstrap once; normally only today's rows need summarising. After downtime,
   // include all dates since the last completed refresh. Imports can clear aggregates
-  // to request a full rebuild on the next successful scheduled collection.
+  // to request a full rebuild on the next scheduled aggregation.
   const previousDate = previous ? torontoParts(new Date(previous.generated_at)).date : cutoff;
   const rebuildFrom = previousDate < cutoff ? cutoff : previousDate;
   await env.DB.batch([
@@ -32,12 +32,14 @@ export async function refreshAggregates(env: Env, now = new Date()) {
     observations,updated_at AS updatedAt FROM history_daily_buckets WHERE local_date >= ? AND local_date <= ?`)
     .bind(cutoff,local.date).all<DailyBucket>();
   const groups = new Map<string, DailyBucket[]>();
-  // Check schedule once per date/bucket rather than once per facility/target weekday.
+  // Check date exclusions once per day, avoiding thousands of timezone conversions.
   const eligibility = new Map<string, boolean>();
   for (const row of rows.results) {
-    const timeKey = `${row.local_date}:${row.minute}`;
-    if (!eligibility.has(timeKey)) eligibility.set(timeKey, eligibleBucket(row.local_date, row.minute));
-    if (!eligibility.get(timeKey)) continue;
+    // Noon determines date exclusions once; numeric bounds cover each bucket.
+    if (!eligibility.has(row.local_date)) eligibility.set(row.local_date,
+      collectionWindow(localInstant(row.local_date, 12 * 60)).state === 'open');
+    const { open, close } = operatingHours(row.weekday);
+    if (!eligibility.get(row.local_date) || row.minute < open || row.minute + 29 >= close) continue;
     const key = `${row.facility_id}:${row.minute}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
