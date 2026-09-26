@@ -109,7 +109,7 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .refresh:hover { color: var(--text); }
 .facility-row { padding: 20px 0; }
 .occupancy-row { display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, 1.2fr) 64px 112px; align-items: center; column-gap: 28px; }
-.facility-name { font-size: 15px; line-height: 1.45; letter-spacing: -.02em; }
+.facility-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 15px; line-height: 1.45; letter-spacing: -.02em; }
 .row-meter { display: block; min-width: 0; }
 .occupancy-value { font-size: 17px; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
 .unavailable-value { color: var(--color-muted); }
@@ -163,3 +163,7 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .disclosure-chevron { position: absolute; right: 0; top: 50%; width: 14px; height: 14px; color: var(--color-muted); transform: translateY(-50%); transition: transform 240ms ease; }
 .reveal-row[data-open="true"] .disclosure-chevron { transform: translateY(-50%) rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .disclosure-chevron { transition: none; } }
+
+.womens-hours-badge { display: inline-block; width: fit-content; padding: 5px 11px; border-radius: 8px; font-size: 12px; line-height: 1.4; letter-spacing: normal; white-space: nowrap; background: #f1eafb; color: #7041a0; }
+:root[data-theme="dark"] .womens-hours-badge { background: #35263f; color: #d5aff5; }
+@media (max-width: 760px) { .womens-hours-badge { font-size: 11px; padding: 4px 8px; } }

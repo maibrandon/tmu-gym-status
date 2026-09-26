@@ -15,3 +15,11 @@ it('keeps the bar and status aligned at both color boundaries',()=>{
   expect(html).toContain(`aria-valuenow="${percentage}"`);
  }
 });
+
+it('shows women’s hours alongside occupancy without replacing its status', () => {
+ const html=renderToStaticMarkup(<OccupancySummary name="RAC" percentage={20} womensHours/>);
+ expect(html).toContain('womens-hours-badge');
+ expect(html).toContain('Quiet');
+ expect(html).toContain('aria-valuenow="20"');
+ expect(renderToStaticMarkup(<OccupancySummary name="MAC" percentage={20}/>)).not.toContain('womens-hours-badge');
+});

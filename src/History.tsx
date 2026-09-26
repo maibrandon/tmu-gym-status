@@ -1,3 +1,4 @@
+import { isWomensHours } from "../shared/womens-hours";
 import { OccupancySummary } from "./OccupancySummary";
 import { torontoParts, collectionWindow, operatingHours } from '../shared/schedule';
 import { HISTORY_POLICY, localInstant, eligibleRecommendation } from '../shared/history';
@@ -57,7 +58,7 @@ export function History({date,time}: {date:string;time:string}) {
     {error && <p role="alert" className="mt-3 text-sm text-muted">{error}</p>}
     <ul>{FACILITIES.map(f=>{
       const baseline=data?.facilities.find(r=>r.id===f.id)?.baseline;
-      return <RevealRow key={f.id} label={`${f.name}, alternative times`} summary={<OccupancySummary name={f.name} percentage={data?.message || error ? null : baseline?.percentage ?? null} loading={loading} />}>
+      return <RevealRow key={f.id} label={`${f.name}, alternative times`} summary={<OccupancySummary name={f.name} womensHours={/^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) && isWomensHours(f.location, localInstant(date, selectedMinute))} percentage={data?.message || error ? null : baseline?.percentage ?? null} loading={loading} />}>
         <HistoryDetails id={f.id} data={data} error={error}/>
       </RevealRow>;
     })}</ul>
