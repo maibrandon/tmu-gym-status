@@ -5,6 +5,10 @@
   "compatibility_date": "2026-09-10",
   "account_id": "cc7eeab68c2d7be799529b5f744e3ee3",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "macorrac.com", "custom_domain": true },
+    { "pattern": "www.macorrac.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

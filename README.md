@@ -6,7 +6,7 @@ I came up with a simple way to check how busy Toronto Metropolitan University’
 
 TMU publishes occupancy for several recreation spaces, but deciding when to go means checking each space and knowing little about how busy it might be later. This project brings all six spaces into a compact, mobile-friendly view and collects historical readings to help explore better times to visit.
 
-[Open the app](https://tmu-gym-status.tmu-gym-status.workers.dev/) · [TMU occupancy source](https://recportal.torontomu.ca/FacilityOccupancy)
+[Open the app](https://macorrac.com/) · [TMU occupancy source](https://recportal.torontomu.ca/FacilityOccupancy)
 
 ## What it does
 
