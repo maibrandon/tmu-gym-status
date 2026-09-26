@@ -1,3 +1,4 @@
+import { isWomensHours } from "../shared/womens-hours";
 import { OccupancySummary } from "./OccupancySummary";
 import { torontoParts, collectionWindow } from "../shared/schedule";
 import { useHistory } from "./useHistory";
@@ -201,7 +202,7 @@ export function App() {
                   key={facility.id}
                   label={`${facility.name}, alternative times`}
                   summary={
-                    <OccupancySummary name={facility.name} percentage={percentage} loading={loading && !snapshot} />
+                    <OccupancySummary name={facility.name} womensHours={isWomensHours(facility.location, new Date(now))} percentage={percentage} loading={loading && !snapshot} />
                   }
                 >
                   <HistoryDetails

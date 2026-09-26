@@ -1,7 +1,7 @@
-export function OccupancySummary({name,percentage,loading=false}: {name:string;percentage:number|null;loading?:boolean}) {
+export function OccupancySummary({name,percentage,loading=false,womensHours=false}: {name:string;percentage:number|null;loading?:boolean;womensHours?:boolean}) {
   return (
                     <span className="occupancy-row">
-                      <span className="facility-name">{name}</span>
+                      <span className="facility-name"><span>{name}</span>{womensHours && <span className="womens-hours-badge">Women's hours</span>}</span>
                       <span className="row-meter">
                       {percentage !== null ? (
                         <span
