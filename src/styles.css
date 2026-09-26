@@ -54,9 +54,6 @@ button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .55; }
 button, input { font: inherit; }
 :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 4px; }
-.brand { font-size: 14px; font-weight: 650; text-decoration: none; color: inherit; }
-.brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #244bd1; color: white; }
-.brand-mark svg { width: 23px; height: 23px; }
 .mode-switch { display: flex; padding: 4px; gap: 4px; background: var(--switch); border: 1px solid var(--color-line); border-radius: 12px; }
 .mode-switch button { flex: 1; min-height: 46px; padding: 10px 8px; border: 0; border-radius: 8px; font-size: 14px; font-weight: 550; color: var(--color-muted); transition: background .15s, color .15s; }
 .mode-switch button.selected { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px #17202e12; }
@@ -92,11 +89,10 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 
 /* A quiet, spacious table on desktop; stacked readings on small screens. */
 .page-shell { width: min(100% - 64px, 1160px); margin: 0 auto; padding-bottom: 32px; }
-.site-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 92px; border-bottom: 1px solid var(--color-line); }
-.brand { font-size: 21px; font-weight: 700; letter-spacing: -.055em; }
+.site-header { display: flex; align-items: center; justify-content: flex-end; min-height: 64px; }
 .location-label { display: flex; align-items: center; gap: 8px; color: var(--color-muted); font-size: 13px; }
 .location-label svg { width: 19px; height: 19px; }
-.hero { padding: 60px 0 38px; }
+.hero { padding: 32px 0 38px; }
 .eyebrow { display: flex; align-items: center; gap: 14px; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; color: var(--color-muted); }
 .hero h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.15; letter-spacing: -.045em; font-weight: 650; margin: 20px 0 0; }
 .mode-switch { width: fit-content; padding: 0; gap: 28px; border: 0; border-radius: 0; background: transparent; margin-bottom: 30px; }
@@ -132,10 +128,9 @@ input[type=time], input[type=date] { display: block; box-sizing: border-box; max
 .future-panel input { max-width: 340px; font-size: 16px; background: var(--surface); border-color: var(--color-line); }
 @media (max-width: 760px) {
   .page-shell { width: calc(100% - 40px); }
-  .site-header { min-height: 76px; }
-  .brand { font-size: 19px; }
+  .site-header { min-height: 56px; }
   .location-label { font-size: 12px; gap: 5px; }
-  .hero { padding-top: 40px; padding-bottom: 24px; }
+  .hero { padding-top: 28px; padding-bottom: 24px; }
   .hero h1 { margin-top: 22px; }
   .mode-switch { margin-bottom: 24px; }
   .section-title { font-size: 23px; }
