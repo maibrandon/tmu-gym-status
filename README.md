@@ -1,4 +1,4 @@
-# TMU Gym Status
+# Mac or Rac?
 
 A problem I run into a lot is wanting to go to the RAC or MAC but I'm never sure if there could be a more optimal time to go when it's less busy (especially since summer just ended).
 
